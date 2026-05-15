@@ -1,0 +1,30 @@
+title: "[show-and-tell] "
+labels: ["show-and-tell"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Built something cool with flowstate? A workflow, an alias, an integration, a screencast — drop it here.
+
+        These posts help everyone discover what flowstate is actually good at. Short and concrete is fine.
+  - type: textarea
+    id: what
+    attributes:
+      label: What did you build / how do you use flowstate?
+      description: One paragraph is plenty. A screenshot, GIF, or asciinema makes it land.
+      placeholder: |
+        I bound `flowstate --output paste --paste-delay 2` to a Raycast hotkey, so I can dictate
+        Slack replies from anywhere on macOS without touching the keyboard.
+    validations:
+      required: true
+  - type: textarea
+    id: snippet
+    attributes:
+      label: Config / alias / script (optional)
+      description: Drop the exact snippet so others can copy it.
+      render: shell
+  - type: textarea
+    id: notes
+    attributes:
+      label: Anything else
+      description: Caveats, what you'd improve, what surprised you. Optional.

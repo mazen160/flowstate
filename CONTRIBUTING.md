@@ -92,3 +92,20 @@ Release process is documented in `docs/RELEASING.md`.
 
 Use the GitHub issue templates under `.github/ISSUE_TEMPLATE/` so we have the
 information needed to reproduce.
+
+## Share what you built
+
+If you wired flowstate into your daily workflow — an alias, a Raycast hotkey, a
+tmux keybind, a Vim mapping, a CI integration — please share it in
+[Discussions → Show & Tell](https://github.com/mazen160/flowstate/discussions/categories/show-and-tell).
+
+A short description plus the exact snippet (alias, config block, script) is
+plenty. Real-world workflows are the best teaching material; they help other
+users discover what flowstate is actually good at, and they often surface
+feature ideas before anyone files an issue.
+
+For half-baked ideas or "what if flowstate could…?" threads, use
+[Discussions → Ideas](https://github.com/mazen160/flowstate/discussions/categories/ideas)
+instead of opening a feature request — it's easier to shape a proposal in a
+discussion, and a clear consensus there can become a fully-formed feature
+request later.

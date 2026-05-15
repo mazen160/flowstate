@@ -1,0 +1,42 @@
+title: "[q&a] "
+labels: ["question"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Have a "how do I…?" question? Ask here. The community (and maintainers) will answer.
+
+        Before posting, please skim the [README](https://github.com/mazen160/flowstate#flowstate)
+        and [existing discussions](https://github.com/mazen160/flowstate/discussions) — chances are
+        someone has hit the same thing.
+  - type: input
+    id: version
+    attributes:
+      label: flowstate version
+      description: Output of `flowstate version`.
+      placeholder: "flowstate v0.1.0 (go 1.24.x)"
+    validations:
+      required: true
+  - type: dropdown
+    id: os
+    attributes:
+      label: Operating system
+      options:
+        - macOS
+        - Linux
+        - Windows
+        - Other / multiple
+    validations:
+      required: true
+  - type: textarea
+    id: question
+    attributes:
+      label: Your question
+      description: What are you trying to do? What have you tried so far?
+    validations:
+      required: true
+  - type: textarea
+    id: snippet
+    attributes:
+      label: Relevant config or command (optional)
+      render: shell

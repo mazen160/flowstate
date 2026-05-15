@@ -1,0 +1,138 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 880 500" role="img" aria-label="flowstate terminal demo">
+  <title>flowstate  speak, clean, ship</title>
+  <desc>Animated terminal session showing flowstate recording, transcribing, cleaning up, and printing the cleaned text.</desc>
+
+  <defs>
+    <linearGradient id="meter" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0%"  stop-color="#22d3ee"/>
+      <stop offset="55%" stop-color="#a855f7"/>
+      <stop offset="100%" stop-color="#f472b6"/>
+    </linearGradient>
+    <linearGradient id="winShadow" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#000" stop-opacity="0.45"/>
+      <stop offset="100%" stop-color="#000" stop-opacity="0"/>
+    </linearGradient>
+    <style>
+      .mono { font-family: 'JetBrains Mono','SF Mono','Menlo','DejaVu Sans Mono',ui-monospace,monospace; font-size: 16px; }
+      .dim     { fill: #64748b; }
+      .text    { fill: #e2e8f0; }
+      .strong  { fill: #f8fafc; font-weight: 600; }
+      .magenta { fill: #f472b6; }
+      .cyan    { fill: #22d3ee; }
+      .green   { fill: #4ade80; }
+      .gold    { fill: #fbbf24; }
+      .bar     { fill: url(#meter); }
+      .caret   { fill: #f8fafc; }
+      .hidden  { opacity: 0; }
+    </style>
+  </defs>
+
+  <!-- Window chrome -->
+  <rect x="0" y="0" width="880" height="500" rx="12" fill="#0b0f17"/>
+  <rect x="0" y="0" width="880" height="32" rx="12" fill="#111827"/>
+  <rect x="0" y="20" width="880" height="14" fill="#111827"/>
+  <circle cx="20" cy="16" r="6" fill="#ef4444"/>
+  <circle cx="40" cy="16" r="6" fill="#f59e0b"/>
+  <circle cx="60" cy="16" r="6" fill="#10b981"/>
+  <text class="mono" x="440" y="20" text-anchor="middle" fill="#94a3b8" font-size="12">flowstate  Think out loud. Ship in text.</text>
+
+  <!-- Prompt line: $ flowstate -->
+  <g transform="translate(24,72)">
+    <text class="mono dim" x="0" y="0">$</text>
+    <text class="mono text" x="20" y="0">flowstate</text>
+  </g>
+
+  <!-- Recording line. Bars animate, text + dot fade in. -->
+  <g transform="translate(24,108)">
+    <text class="mono magenta" x="0" y="0">Ï</text>
+    <text class="mono text"    x="20" y="0">Recording</text>
+
+    <!-- Live mic meter: 7 bars whose heights pulse independently -->
+    <g transform="translate(135,-12)">
+      <rect class="bar" x="0"  y="6"  width="6" height="6"  rx="1.5">
+        <animate attributeName="height" values="3;14;6;10;4;12;5"  dur="0.9s" repeatCount="6"/>
+        <animate attributeName="y"      values="9;-2;6;2;8;0;7"    dur="0.9s" repeatCount="6"/>
+      </rect>
+      <rect class="bar" x="10" y="2"  width="6" height="14" rx="1.5">
+        <animate attributeName="height" values="14;6;16;8;12;5;10" dur="0.9s" repeatCount="6"/>
+        <animate attributeName="y"      values="-2;6;-4;4;0;7;2"   dur="0.9s" repeatCount="6"/>
+      </rect>
+      <rect class="bar" x="20" y="-4" width="6" height="20" rx="1.5">
+        <animate attributeName="height" values="20;10;18;6;16;9;14" dur="0.9s" repeatCount="6"/>
+        <animate attributeName="y"      values="-8;2;-6;6;-4;3;-2"  dur="0.9s" repeatCount="6"/>
+      </rect>
+      <rect class="bar" x="30" y="-8" width="6" height="28" rx="1.5">
+        <animate attributeName="height" values="28;14;22;10;26;12;20" dur="0.9s" repeatCount="6"/>
+        <animate attributeName="y"      values="-12;2;-6;2;-10;0;-4"  dur="0.9s" repeatCount="6"/>
+      </rect>
+      <rect class="bar" x="40" y="-4" width="6" height="20" rx="1.5">
+        <animate attributeName="height" values="20;8;16;12;22;6;18"   dur="0.9s" repeatCount="6"/>
+        <animate attributeName="y"      values="-8;4;-4;0;-10;6;-6"   dur="0.9s" repeatCount="6"/>
+      </rect>
+      <rect class="bar" x="50" y="2"  width="6" height="14" rx="1.5">
+        <animate attributeName="height" values="14;4;12;8;16;6;10"    dur="0.9s" repeatCount="6"/>
+        <animate attributeName="y"      values="-2;8;0;4;-4;6;2"      dur="0.9s" repeatCount="6"/>
+      </rect>
+      <rect class="bar" x="60" y="6"  width="6" height="6"  rx="1.5">
+        <animate attributeName="height" values="6;3;8;4;10;5;6"       dur="0.9s" repeatCount="6"/>
+        <animate attributeName="y"      values="6;9;4;8;2;7;6"        dur="0.9s" repeatCount="6"/>
+      </rect>
+    </g>
+
+    <text class="mono dim" x="220" y="0"> press Enter to stop</text>
+  </g>
+
+  <!-- Phase 2: Transcribing& (fades in after recording phase) -->
+  <g transform="translate(24,144)" opacity="0">
+    <text class="mono cyan" x="0" y="0">Ï</text>
+    <text class="mono text" x="20" y="0">Transcribing&</text>
+    <animate attributeName="opacity" values="0;0;1;1" keyTimes="0;0.62;0.66;1" dur="9s" repeatCount="indefinite"/>
+  </g>
+
+  <!-- Phase 3: Cleaning up& -->
+  <g transform="translate(24,180)" opacity="0">
+    <text class="mono cyan" x="0" y="0">Ï</text>
+    <text class="mono text" x="20" y="0">Cleaning up&</text>
+    <animate attributeName="opacity" values="0;0;1;1" keyTimes="0;0.74;0.78;1" dur="9s" repeatCount="indefinite"/>
+  </g>
+
+  <!-- Phase 4: Done. -->
+  <g transform="translate(24,216)" opacity="0">
+    <text class="mono green" x="0" y="0"></text>
+    <text class="mono text"  x="20" y="0">Done.</text>
+    <text class="mono dim"   x="80" y="0">(94 characters, 1.8s)</text>
+    <animate attributeName="opacity" values="0;0;1;1" keyTimes="0;0.84;0.88;1" dur="9s" repeatCount="indefinite"/>
+  </g>
+
+  <!-- Phase 5: Cleaned transcript -->
+  <g transform="translate(24,272)" opacity="0">
+    <text class="mono strong" x="0" y="0">Hey, just following up on the meeting from yesterday. I think we</text>
+    <text class="mono strong" x="0" y="22">should definitely move the deadline to next Friday.</text>
+    <animate attributeName="opacity" values="0;0;1;1" keyTimes="0;0.9;0.94;1" dur="9s" repeatCount="indefinite"/>
+  </g>
+
+  <!-- Blinking cursor at the end of the transcript -->
+  <rect class="caret" x="416" y="280" width="9" height="18" rx="1" opacity="0">
+    <animate attributeName="opacity"
+             values="0;0;1;1;0;1;0;1"
+             keyTimes="0;0.92;0.94;0.95;0.96;0.97;0.98;1"
+             dur="9s" repeatCount="indefinite"/>
+  </rect>
+
+  <!-- Bottom hint pill -->
+  <g transform="translate(24,452)">
+    <rect x="0"   y="0" width="120" height="26" rx="13" fill="#1e293b" stroke="#334155" stroke-width="1"/>
+    <text class="mono" x="14" y="17" font-size="12" fill="#94a3b8">Speak  ·  Clean  ·  Ship</text>
+
+    <text class="mono dim" x="140" y="17" font-size="12">stdout · clipboard · paste</text>
+  </g>
+
+  <!-- Subtle scanline texture for terminal feel -->
+  <g opacity="0.04">
+    <rect x="0" y="40" width="880" height="1" fill="#22d3ee"/>
+    <rect x="0" y="100" width="880" height="1" fill="#22d3ee"/>
+    <rect x="0" y="200" width="880" height="1" fill="#22d3ee"/>
+    <rect x="0" y="300" width="880" height="1" fill="#22d3ee"/>
+    <rect x="0" y="400" width="880" height="1" fill="#22d3ee"/>
+  </g>
+</svg>

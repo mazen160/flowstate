@@ -1,0 +1,28 @@
+title: "[idea] "
+labels: ["idea"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Half-baked thought, design conversation, or "what if flowstate could…?" — start here, before
+        opening a feature request. Discussions stay open longer than issues, so they're great for
+        ideas that need community shaping before they become work.
+  - type: textarea
+    id: idea
+    attributes:
+      label: The idea
+      description: One paragraph is plenty. Concrete examples land better than abstract ones.
+    validations:
+      required: true
+  - type: textarea
+    id: motivation
+    attributes:
+      label: Why it would matter
+      description: Who benefits, and what does it unlock?
+    validations:
+      required: true
+  - type: textarea
+    id: shape
+    attributes:
+      label: A rough shape (optional)
+      description: CLI flag, config key, output mode, integration, etc. Strawman is welcome — it's easier to react to.

@@ -1,30 +1,59 @@
 /* flowstate web stylesheet.
  *
- * Design intent: a focused dictation page, not a SaaS dashboard. Single
- * 640px reading column anchored under a thin top bar. Subtle surface
- * tints — no rounded-2xl shadow blobs, no gradient hero. Type does the
- * work. Recording is the only red on the page.
+ * Design intent: a calm, light, airy dictation page. Soft off-white surface,
+ * a single cyan→purple→pink gradient as the only chromatic accent, and
+ * generous sizing so the tool feels inviting at a glance. Inter for prose,
+ * JetBrains Mono / SF Mono for system labels and timestamps. A 720px
+ * reading column under a thin top bar.
  *
- * Dark by default. The bottom of the file flips the palette for light
- * mode via prefers-color-scheme.
+ * Color tokens are gathered at the top so a future palette swap touches
+ * one block. Dark mode is an explicit opt-in via prefers-color-scheme.
  */
 
 * { box-sizing: border-box; }
 
 :root {
-  --bg:         #07080b;
-  --surface:   #0e1015;
-  --surface-2: #14171e;
-  --line:      #1a1d25;
-  --line-2:    #232730;
-  --text:      #eceef2;
-  --text-2:    #a9afbb;
-  --text-3:    #6c7280;
-  --accent:    #d34a4a;
-  --focus:     #6a8aff;
-  --radius:    10px;
-  --radius-sm: 6px;
-  --col-w:     640px;
+  /* Surfaces: warm off-white, not stark #fff (easier on the eyes during
+     long dictation sessions). Each step lifts in tone, not chroma. */
+  --bg:         #fafbfd;
+  --surface:    #ffffff;
+  --surface-2:  #f3f5fa;
+  --surface-3:  #e9edf4;
+  --line:       #e3e7ee;
+  --line-2:     #d2d7e1;
+
+  /* Text: high-contrast slate, deliberately dark enough to read at the
+     larger body size below without feeling shouty. */
+  --text:       #11151f;
+  --text-2:     #4a5061;
+  --text-3:     #757c8c;
+
+  /* Brand gradient stops. Slightly desaturated from the dark-mode pair
+     so the gradient sits on white without burning. */
+  --c-cyan:     #0ea5c2;
+  --c-purple:   #8b3ad8;
+  --c-pink:     #d23a90;
+
+  /* Single-stop accents. The pink stays the loud one, the cyan is the
+     quieter "ready / focus" tone. */
+  --accent:     var(--c-pink);
+  --focus:      var(--c-cyan);
+
+  /* The brand gradient — used for the brand mark, recording-state meter
+     bars, the result-card hairline, etc. Reused both as a CSS gradient
+     and (via SVG <linearGradient id="fsAccent">) as a fill. */
+  --grad-brand: linear-gradient(90deg, var(--c-cyan) 0%, var(--c-purple) 55%, var(--c-pink) 100%);
+
+  --radius:     14px;
+  --radius-sm:  10px;
+
+  /* Wider reading column — the previous 640 felt cramped on desktop. */
+  --col-w:      720px;
+
+  --mono: ui-monospace, "JetBrains Mono", "SF Mono", Menlo, Consolas, monospace;
+  --sans: -apple-system, BlinkMacSystemFont, "Inter", "Segoe UI", system-ui, sans-serif;
+
+  color-scheme: light;
 }
 
 html, body { background: var(--bg); color: var(--text); }
@@ -32,7 +61,31 @@ body {
   min-height: 100vh;
   display: flex;
   flex-direction: column;
+  font-family: var(--sans);
+  /* Bump base size for legibility. All other sizes scale relative to
+     this; tightening it later is a one-line edit. */
+  font-size: 16px;
+  line-height: 1.55;
 }
+
+/* Subtle ambient backdrop: a faint vertical waveform texture + a wash of
+   purple-pink at the top so the page reads as branded rather than blank.
+   Both are at very low opacity — they read as "atmosphere", not pattern. */
+body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 0;
+  background:
+    repeating-linear-gradient(90deg,
+      rgba(14, 165, 194, 0.035) 0 1px,
+      transparent 1px 9px),
+    radial-gradient(1400px 900px at 50% -240px,
+      rgba(139, 58, 216, 0.08) 0%,
+      transparent 60%);
+}
+body > * { position: relative; z-index: 1; }
 
 /* Accessibility helper. */
 .visually-hidden {
@@ -49,46 +102,86 @@ body {
   position: sticky;
   top: 0;
   z-index: 10;
-  background: color-mix(in oklab, var(--bg) 92%, transparent);
-  backdrop-filter: saturate(120%) blur(8px);
-  -webkit-backdrop-filter: saturate(120%) blur(8px);
+  background: color-mix(in oklab, var(--bg) 86%, transparent);
+  backdrop-filter: saturate(140%) blur(10px);
+  -webkit-backdrop-filter: saturate(140%) blur(10px);
   border-bottom: 1px solid var(--line);
 }
 .topbar-inner {
   max-width: var(--col-w);
   margin: 0 auto;
-  padding: 12px 20px;
+  padding: 14px 24px;
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 16px;
 }
+
 .brand {
   display: inline-flex;
   align-items: center;
-  gap: 8px;
-  font-weight: 600;
-  font-size: 14px;
-  letter-spacing: 0.01em;
+  gap: 12px;
+  text-decoration: none;
   color: var(--text);
+  -webkit-tap-highlight-color: transparent;
 }
-.brand-dot {
-  width: 8px; height: 8px;
-  border-radius: 50%;
-  background: var(--accent);
-  box-shadow: 0 0 0 3px color-mix(in oklab, var(--accent) 25%, transparent);
+.brand:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 4px;
+  border-radius: 8px;
 }
-.brand-name { user-select: none; }
+
+/* The brand mark — six waveform bars + a caret block, painted with the
+   shared gradient declared once in index.html (#fsAccent). The caret
+   blinks subtly to nod at the terminal heritage. */
+.brand-mark {
+  width: 38px;
+  height: 20px;
+  display: block;
+}
+.brand-mark .bar {
+  fill: url(#fsAccent);
+}
+.brand-mark .caret {
+  animation: caret-blink 1.6s ease-in-out infinite;
+}
+@keyframes caret-blink {
+  0%, 45%   { opacity: 1; }
+  50%, 95%  { opacity: 0.2; }
+  100%      { opacity: 1; }
+}
+
+.brand-text {
+  display: inline-flex;
+  flex-direction: column;
+  line-height: 1.05;
+}
+.brand-name {
+  font-family: var(--mono);
+  font-weight: 700;
+  font-size: 17px;
+  letter-spacing: -0.005em;
+  user-select: none;
+}
+.brand-tag {
+  margin-top: 3px;
+  font-family: var(--mono);
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  color: var(--text-3);
+}
 
 .session-bar {
   display: inline-flex;
   align-items: center;
-  gap: 10px;
-  font-size: 13px;
+  gap: 12px;
+  font-size: 14px;
 }
 .session-label {
-  font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
-  font-size: 12px;
+  font-family: var(--mono);
+  font-size: 13px;
   color: var(--text-2);
   letter-spacing: 0.02em;
 }
@@ -98,47 +191,58 @@ body {
 .btn {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
-  font: 13px/1 inherit;
+  gap: 7px;
+  font: 14px/1 inherit;
   font-family: inherit;
   font-weight: 500;
-  padding: 7px 12px;
+  padding: 9px 14px;
   border-radius: var(--radius-sm);
   border: 1px solid var(--line-2);
-  background: var(--surface-2);
+  background: var(--surface);
   color: var(--text);
   cursor: pointer;
-  transition: border-color 120ms ease, background 120ms ease, color 120ms ease, transform 80ms ease;
+  transition: border-color 120ms ease, background 120ms ease, color 120ms ease, transform 80ms ease, box-shadow 120ms ease;
   white-space: nowrap;
+  box-shadow: 0 1px 0 rgba(17, 21, 31, 0.025);
 }
-.btn:hover { border-color: #2e333e; background: #1a1e26; }
+.btn:hover {
+  border-color: color-mix(in oklab, var(--c-purple) 35%, var(--line-2));
+  background: var(--surface-2);
+  box-shadow: 0 1px 0 rgba(17, 21, 31, 0.04), 0 4px 14px -8px rgba(139, 58, 216, 0.25);
+}
 .btn:active { transform: translateY(1px); }
 .btn:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
 
 .btn-ghost {
   background: transparent;
   color: var(--text-2);
+  box-shadow: none;
 }
-.btn-ghost:hover { color: var(--text); background: var(--surface-2); }
+.btn-ghost:hover {
+  color: var(--text);
+  background: var(--surface);
+  border-color: color-mix(in oklab, var(--c-cyan) 30%, var(--line-2));
+}
 
 .icon-plus, .icon-gear {
   display: inline-block;
   font-weight: 400;
   color: var(--text-3);
   line-height: 1;
-  font-size: 13px;
+  font-size: 14px;
 }
 
 kbd {
   display: inline-block;
-  padding: 1px 7px;
+  padding: 2px 8px;
   border: 1px solid var(--line-2);
   border-bottom-width: 2px;
   border-radius: var(--radius-sm);
-  font: 12px/1.2 ui-monospace, "SF Mono", Menlo, Consolas, monospace;
-  background: var(--surface-2);
+  font: 13px/1.2 var(--mono);
+  background: var(--surface);
   color: var(--text);
   vertical-align: 0.5px;
+  box-shadow: 0 1px 0 rgba(17, 21, 31, 0.04);
 }
 
 /* ────────── page column ────────── */
@@ -148,10 +252,10 @@ kbd {
   width: 100%;
   max-width: var(--col-w);
   margin: 0 auto;
-  padding: 56px 20px 120px;
+  padding: 64px 24px 140px;
   display: flex;
   flex-direction: column;
-  gap: 44px;
+  gap: 56px;
 }
 
 /* ────────── recorder ────────── */
@@ -160,97 +264,201 @@ kbd {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 16px;
+  gap: 22px;
 }
 
 .rec-btn {
   position: relative;
-  width: 132px;
-  height: 132px;
+  width: 184px;
+  height: 184px;
   border-radius: 50%;
   border: 1px solid var(--line-2);
+  /* White button with a soft gradient edge so it lifts off the bg. */
   background:
-    radial-gradient(circle at 50% 35%, #1c2029 0%, #11141a 70%);
+    radial-gradient(circle at 50% 30%, #ffffff 0%, #f0f3f9 70%);
   cursor: pointer;
   display: grid;
   place-items: center;
-  transition: transform 120ms ease, border-color 200ms ease, background 200ms ease;
+  transition: transform 120ms ease, border-color 200ms ease, background 200ms ease, box-shadow 200ms ease;
+  isolation: isolate;
+  box-shadow:
+    0 1px 0 rgba(17, 21, 31, 0.04),
+    0 14px 38px -22px rgba(139, 58, 216, 0.45),
+    0 6px 16px -10px rgba(14, 165, 194, 0.25);
 }
-.rec-btn:hover { border-color: #2e333e; }
+.rec-btn:hover {
+  border-color: color-mix(in oklab, var(--c-purple) 40%, var(--line-2));
+  box-shadow:
+    0 1px 0 rgba(17, 21, 31, 0.05),
+    0 18px 44px -20px rgba(139, 58, 216, 0.55),
+    0 8px 20px -10px rgba(14, 165, 194, 0.32);
+}
 .rec-btn:active { transform: scale(0.97); }
-.rec-btn:focus-visible { outline: 2px solid var(--focus); outline-offset: 4px; }
+.rec-btn:focus-visible { outline: 2px solid var(--focus); outline-offset: 5px; }
 
-/* Outer ring sits just inside the rim — soft, very subtle. */
+/* Outer ring sits just inside the rim — soft, very subtle in idle. */
 .rec-ring {
   position: absolute;
-  inset: 14px;
+  inset: 16px;
   border-radius: 50%;
-  border: 1px solid color-mix(in oklab, var(--accent) 18%, transparent);
-  transition: border-color 200ms ease, transform 200ms ease;
+  border: 1px solid color-mix(in oklab, var(--c-purple) 22%, transparent);
+  transition: border-color 200ms ease, transform 300ms ease, opacity 200ms ease;
   pointer-events: none;
 }
 
-.rec-dot {
-  width: 30px; height: 30px;
+/* Soft glow behind the button — comes alive when recording. */
+.rec-glow {
+  position: absolute;
+  inset: -10px;
   border-radius: 50%;
-  background: var(--accent);
-  box-shadow: 0 0 0 6px color-mix(in oklab, var(--accent) 22%, transparent);
-  transition: transform 160ms ease, background 200ms ease, box-shadow 200ms ease;
+  background: radial-gradient(circle, color-mix(in oklab, var(--c-pink) 28%, transparent) 0%, transparent 65%);
+  opacity: 0;
+  transition: opacity 240ms ease;
+  pointer-events: none;
+  z-index: -1;
 }
 
-.rec-btn[data-state="recording"] {
-  border-color: var(--accent);
-  background: radial-gradient(circle at 50% 35%, #281414 0%, #160a0a 70%);
+/* Idle layer: brand mark painted with the same gradient. Visible only
+   when state is "" (idle). Caret keeps blinking at rest so the page
+   feels "ready to listen". */
+.rec-icon {
+  display: grid;
+  place-items: center;
+  transition: opacity 180ms ease, transform 180ms ease;
 }
-.rec-btn[data-state="recording"] .rec-dot {
-  animation: rec-pulse 1100ms ease-in-out infinite;
+.rec-icon svg { width: 96px; height: 50px; display: block; }
+.rec-icon .bar { fill: url(#fsAccent); }
+.rec-icon .caret { animation: caret-blink 1.6s ease-in-out infinite; }
+
+/* Meter layer: 7 vertical bars driven from JS while recording. */
+.rec-meter {
+  position: absolute;
+  inset: 0;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  pointer-events: none;
+}
+.rec-meter-bar {
+  width: 9px;
+  border-radius: 3px;
+  background: var(--grad-brand);
+  height: var(--meter-h, 10px);
+  min-height: 8px;
+  max-height: 76px;
+  box-shadow: 0 0 14px color-mix(in oklab, var(--c-pink) 38%, transparent);
+  transition: height 110ms cubic-bezier(.2,.6,.2,1);
+}
+/* Each bar reads its height from its own custom property. */
+.rec-btn .rec-meter-bar:nth-child(1) { --meter-h: var(--lvl0, 12px); }
+.rec-btn .rec-meter-bar:nth-child(2) { --meter-h: var(--lvl1, 22px); }
+.rec-btn .rec-meter-bar:nth-child(3) { --meter-h: var(--lvl2, 36px); }
+.rec-btn .rec-meter-bar:nth-child(4) { --meter-h: var(--lvl3, 48px); }
+.rec-btn .rec-meter-bar:nth-child(5) { --meter-h: var(--lvl4, 36px); }
+.rec-btn .rec-meter-bar:nth-child(6) { --meter-h: var(--lvl5, 22px); }
+.rec-btn .rec-meter-bar:nth-child(7) { --meter-h: var(--lvl6, 12px); }
+
+/* State: recording. The ring activates; the brand mark gives way to the
+   live meter; the glow under the button lights up. */
+.rec-btn[data-state="recording"] {
+  border-color: color-mix(in oklab, var(--c-pink) 60%, var(--line-2));
+  background: radial-gradient(circle at 50% 30%, #fff5fa 0%, #ffe6f1 70%);
 }
 .rec-btn[data-state="recording"] .rec-ring {
-  border-color: color-mix(in oklab, var(--accent) 38%, transparent);
-  animation: rec-ring-pulse 1100ms ease-in-out infinite;
+  border-color: color-mix(in oklab, var(--c-pink) 50%, transparent);
+  animation: rec-ring-pulse 1400ms ease-in-out infinite;
 }
+.rec-btn[data-state="recording"] .rec-glow { opacity: 1; }
+.rec-btn[data-state="recording"] .rec-icon { display: none; }
+.rec-btn[data-state="recording"] .rec-meter { display: flex; }
 
+/* State: uploading. Cool cyan tone, dimmer pulse. */
 .rec-btn[data-state="uploading"] {
-  border-color: var(--focus);
-  background: radial-gradient(circle at 50% 35%, #141d2c 0%, #0a0f1a 70%);
-}
-.rec-btn[data-state="uploading"] .rec-dot {
-  background: var(--focus);
-  box-shadow: 0 0 0 6px color-mix(in oklab, var(--focus) 22%, transparent);
+  border-color: color-mix(in oklab, var(--c-cyan) 55%, var(--line-2));
+  background: radial-gradient(circle at 50% 30%, #f1faff 0%, #d6eef9 70%);
 }
 .rec-btn[data-state="uploading"] .rec-ring {
-  border-color: color-mix(in oklab, var(--focus) 38%, transparent);
+  border-color: color-mix(in oklab, var(--c-cyan) 50%, transparent);
+  animation: rec-ring-pulse 900ms ease-in-out infinite;
+}
+.rec-btn[data-state="uploading"] .rec-icon { display: none; }
+.rec-btn[data-state="uploading"] .rec-meter {
+  display: flex;
+  animation: meter-uploading 900ms ease-in-out infinite;
+}
+.rec-btn[data-state="uploading"] .rec-meter-bar {
+  background: linear-gradient(180deg, var(--c-cyan) 0%, color-mix(in oklab, var(--c-cyan) 60%, var(--c-purple)) 100%);
+  box-shadow: 0 0 12px color-mix(in oklab, var(--c-cyan) 40%, transparent);
 }
 
-@keyframes rec-pulse {
-  0%, 100% { transform: scale(1);    box-shadow: 0 0 0  6px color-mix(in oklab, var(--accent) 22%, transparent); }
-  50%      { transform: scale(0.86); box-shadow: 0 0 0 14px color-mix(in oklab, var(--accent) 6%,  transparent); }
-}
 @keyframes rec-ring-pulse {
   0%, 100% { transform: scale(1);    opacity: 1; }
-  50%      { transform: scale(1.04); opacity: 0.65; }
+  50%      { transform: scale(1.07); opacity: 0.55; }
+}
+@keyframes meter-uploading {
+  0%, 100% { opacity: 0.6; }
+  50%      { opacity: 1; }
 }
 
+/* Two-line recorder hint: a primary instruction (tap to toggle) + a
+   subtler secondary instruction (press & hold for push-to-talk). The
+   subline gets a slight pill background so it reads as a "pro tip"
+   without crowding the primary line. */
 .rec-hint {
-  margin: 4px 0 0;
-  color: var(--text-3);
-  font-size: 13px;
+  margin: 6px 0 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
   text-align: center;
 }
-.rec-status {
-  min-height: 1.2em;
-  margin: 0;
+.rec-hint-line {
+  color: var(--text-2);
+  font-size: 15px;
+  line-height: 1.5;
+}
+.rec-hint-line strong {
+  color: var(--text);
+  font-weight: 600;
+}
+.rec-hint-sub {
   font-size: 13px;
+  color: var(--text-3);
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: var(--surface-2);
+  border: 1px solid var(--line);
+}
+.rec-hint-sub strong { color: var(--text-2); }
+
+.rec-status {
+  min-height: 1.4em;
+  margin: 0;
+  font-size: 14px;
   color: var(--text-2);
   font-variant-numeric: tabular-nums;
   text-align: center;
 }
 
+/* While the user is hold-to-talking, the rec button gets a "holding"
+   data-state. We tweak the ring + scale subtly so it feels like the
+   button is being squeezed. */
+.rec-btn[data-hold="true"] {
+  transform: scale(0.97);
+  box-shadow:
+    0 1px 0 rgba(17, 21, 31, 0.06),
+    0 22px 50px -22px rgba(139, 58, 216, 0.65),
+    0 10px 22px -10px rgba(14, 165, 194, 0.38);
+}
+.rec-btn[data-hold="true"]:active { transform: scale(0.95); }
+
 /* ────────── section labels ────────── */
 
 .section-label {
   display: inline-block;
-  font-size: 11px;
+  font-family: var(--mono);
+  font-size: 12px;
   font-weight: 600;
   letter-spacing: 0.14em;
   text-transform: uppercase;
@@ -261,46 +469,62 @@ kbd {
 
 .result-card {
   position: relative;
-  padding: 18px 20px 20px;
+  padding: 24px 26px 26px;
   border: 1px solid var(--line);
   border-radius: var(--radius);
-  background: linear-gradient(180deg, var(--surface-2) 0%, var(--surface) 100%);
+  background: var(--surface);
+  overflow: hidden;
+  box-shadow:
+    0 1px 0 rgba(17, 21, 31, 0.025),
+    0 12px 32px -22px rgba(139, 58, 216, 0.20);
 }
+/* Hairline gradient on the left edge — accent for "Latest". */
 .result-card::before {
-  /* hairline accent bar on the left edge — anchors the card visually
-     without needing a shadow blob. */
   content: "";
   position: absolute;
-  left: 0; top: 14px; bottom: 14px;
-  width: 2px;
-  background: var(--accent);
-  border-radius: 2px;
+  left: 0; top: 16px; bottom: 16px;
+  width: 3px;
+  background: var(--grad-brand);
+  border-radius: 3px;
+}
+/* Soft brand wash at the top edge so the card sits up off the page. */
+.result-card::after {
+  content: "";
+  position: absolute;
+  left: 0; right: 0; top: 0;
+  height: 1px;
+  background: linear-gradient(90deg,
+    transparent 0%,
+    color-mix(in oklab, var(--c-cyan) 50%, transparent) 30%,
+    color-mix(in oklab, var(--c-purple) 50%, transparent) 60%,
+    color-mix(in oklab, var(--c-pink) 50%, transparent) 90%,
+    transparent 100%);
+  opacity: 0.7;
+  pointer-events: none;
 }
 .result-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 10px;
-  gap: 12px;
+  margin-bottom: 14px;
+  gap: 14px;
 }
 .result-actions {
   display: inline-flex;
   align-items: center;
-  gap: 14px;
+  gap: 16px;
 }
 
-/* Compact copy button used on the result card + per-history-item. Shares
-   ghost-button styling vibe with raw-toggle but reads as an action, not
-   a disclosure, so it gets a subtle border + filled icon. */
+/* Compact copy button used on the result card + per-history-item. */
 .copy-btn {
   display: inline-flex;
   align-items: center;
-  gap: 5px;
-  background: transparent;
+  gap: 6px;
+  background: var(--surface);
   border: 1px solid var(--line-2);
   border-radius: var(--radius-sm);
-  padding: 4px 9px;
-  font: 12px/1 inherit;
+  padding: 5px 11px;
+  font: 13px/1 inherit;
   font-family: inherit;
   color: var(--text-2);
   cursor: pointer;
@@ -308,7 +532,7 @@ kbd {
   white-space: nowrap;
 }
 .copy-btn:hover {
-  border-color: #2e333e;
+  border-color: color-mix(in oklab, var(--c-cyan) 35%, var(--line-2));
   color: var(--text);
   background: var(--surface-2);
 }
@@ -317,49 +541,47 @@ kbd {
   outline-offset: 2px;
 }
 .copy-btn[data-state="copied"] {
-  border-color: color-mix(in oklab, var(--focus) 50%, transparent);
-  color: var(--focus);
+  border-color: color-mix(in oklab, var(--c-cyan) 60%, transparent);
+  color: var(--c-cyan);
+  background: color-mix(in oklab, var(--c-cyan) 10%, var(--surface));
 }
 .copy-icon {
   display: inline-block;
-  font-size: 13px;
+  font-size: 14px;
   line-height: 1;
   color: var(--text-3);
 }
 .copy-btn:hover .copy-icon { color: var(--text-2); }
-.copy-btn[data-state="copied"] .copy-icon { color: var(--focus); }
+.copy-btn[data-state="copied"] .copy-icon { color: var(--c-cyan); }
+
 .result-text {
   margin: 0;
-  font-size: 17px;
-  line-height: 1.55;
+  font-size: 19px;
+  line-height: 1.6;
   color: var(--text);
   white-space: pre-wrap;
   word-wrap: break-word;
 }
 .result-raw {
-  margin: 12px 0 0;
-  padding-top: 12px;
+  margin: 14px 0 0;
+  padding-top: 14px;
   border-top: 1px dashed var(--line-2);
-  font: 13px/1.55 ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  font: 14px/1.6 var(--mono);
   color: var(--text-2);
   white-space: pre-wrap;
   word-wrap: break-word;
 }
 
-/* Show-raw toggle: a real button, not a <details> with browser defaults.
-   This is the bug from the screenshot — a focused <summary> on a <details>
-   element was drawing a chunky default focus ring around the whole block.
-   We use a real <button> + JS hidden toggle now, so focus styling is
-   predictable. */
+/* Show-raw toggle — a real <button> so focus styling is predictable. */
 .raw-toggle {
   display: inline-flex;
   align-items: center;
-  gap: 4px;
+  gap: 5px;
   background: transparent;
   border: 0;
   padding: 2px 0;
   font: inherit;
-  font-size: 12px;
+  font-size: 13px;
   color: var(--text-3);
   cursor: pointer;
   transition: color 120ms ease;
@@ -376,7 +598,7 @@ kbd {
   display: inline-block;
   transform: rotate(0deg);
   transition: transform 140ms ease;
-  font-size: 14px;
+  font-size: 16px;
   line-height: 1;
 }
 .raw-toggle[aria-expanded="true"]::before {
@@ -385,15 +607,15 @@ kbd {
 
 /* ────────── history ────────── */
 
-.history-section { display: flex; flex-direction: column; gap: 10px; }
+.history-section { display: flex; flex-direction: column; gap: 14px; }
 .history-header {
   display: flex;
   align-items: baseline;
   justify-content: space-between;
 }
 .history-count {
-  font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
-  font-size: 11px;
+  font-family: var(--mono);
+  font-size: 12px;
   color: var(--text-3);
 }
 .history-list {
@@ -404,26 +626,23 @@ kbd {
   flex-direction: column;
 }
 .history-item {
-  padding: 14px 0;
+  padding: 18px 0;
   border-top: 1px solid var(--line);
 }
-.history-item:first-child { border-top: 0; padding-top: 0; }
+.history-item:first-child { border-top: 0; padding-top: 4px; }
 .history-meta {
   display: flex;
   align-items: center;
-  gap: 10px;
-  margin-bottom: 6px;
-  font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
-  font-size: 11px;
+  gap: 12px;
+  margin-bottom: 8px;
+  font-family: var(--mono);
+  font-size: 12px;
   color: var(--text-3);
   letter-spacing: 0.02em;
 }
-/* Copy button on a history item is pushed to the right of the row so the
-   timestamp stays anchored to the left. The button keeps its own font
-   stack — don't inherit the monospace meta-row font. */
 .history-meta .copy-btn {
   margin-left: auto;
-  font-family: -apple-system, BlinkMacSystemFont, "Inter", "Segoe UI", system-ui, sans-serif;
+  font-family: var(--sans);
   letter-spacing: normal;
 }
 .history-meta-dot {
@@ -435,132 +654,134 @@ kbd {
 }
 .history-cleaned {
   margin: 0;
-  font-size: 15px;
-  line-height: 1.55;
+  font-size: 16px;
+  line-height: 1.6;
   color: var(--text);
   white-space: pre-wrap;
   word-wrap: break-word;
 }
 .history-raw {
-  margin: 10px 0 0;
-  padding-top: 10px;
+  margin: 12px 0 0;
+  padding-top: 12px;
   border-top: 1px dashed var(--line-2);
-  font: 12px/1.55 ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  font: 13px/1.6 var(--mono);
   color: var(--text-2);
   white-space: pre-wrap;
   word-wrap: break-word;
 }
 .history-empty {
-  margin: 4px 0 0;
-  font-size: 13px;
-  color: var(--text-3);
+  margin: 6px 0 0;
+  font-size: 15px;
+  color: var(--text-2);
+  line-height: 1.7;
 }
+.history-empty kbd { font-size: 12px; }
 
 /* ────────── dock (bottom toolbar) ────────── */
 
 .dock {
   position: sticky;
   bottom: 0;
-  background: color-mix(in oklab, var(--bg) 92%, transparent);
-  backdrop-filter: saturate(120%) blur(8px);
-  -webkit-backdrop-filter: saturate(120%) blur(8px);
+  background: color-mix(in oklab, var(--bg) 86%, transparent);
+  backdrop-filter: saturate(140%) blur(10px);
+  -webkit-backdrop-filter: saturate(140%) blur(10px);
   border-top: 1px solid var(--line);
 }
 .dock-inner {
   max-width: var(--col-w);
   margin: 0 auto;
-  padding: 10px 20px;
+  padding: 12px 24px;
   display: flex;
-  gap: 8px;
+  gap: 10px;
   flex-wrap: wrap;
 }
 
 .settings-sheet {
   max-width: var(--col-w);
   margin: 0 auto;
-  padding: 16px 20px 20px;
+  padding: 20px 24px 24px;
   border-top: 1px solid var(--line);
-  background: var(--surface);
+  background: var(--surface-2);
 }
 .settings-grid {
   display: grid;
   grid-template-columns: 1fr;
-  gap: 14px;
+  gap: 16px;
 }
 @media (min-width: 540px) {
-  .settings-grid { grid-template-columns: 1fr 1fr; gap: 16px; }
+  .settings-grid { grid-template-columns: 1fr 1fr; gap: 18px; }
 }
 .field {
   display: grid;
-  gap: 6px;
+  gap: 7px;
 }
 .field-label {
-  font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
-  font-size: 11px;
+  font-family: var(--mono);
+  font-size: 12px;
   color: var(--text-3);
   letter-spacing: 0.06em;
   text-transform: uppercase;
 }
 .field input, .field select {
-  background: var(--surface-2);
+  background: var(--surface);
   color: var(--text);
   border: 1px solid var(--line-2);
   border-radius: var(--radius-sm);
-  padding: 8px 10px;
-  font: 13px/1.4 inherit;
+  padding: 10px 12px;
+  font: 14px/1.4 inherit;
   font-family: inherit;
 }
 .field input:focus, .field select:focus {
   outline: none;
-  border-color: var(--focus);
+  border-color: var(--c-cyan);
   background: var(--surface);
+  box-shadow: 0 0 0 3px color-mix(in oklab, var(--c-cyan) 22%, transparent);
 }
-/* Single-row toggle setting: native checkbox + label rows.
-   Spans the full width so the description has room to breathe. */
+
+/* Single-row toggle setting. */
 .toggle-row {
   display: flex;
   align-items: flex-start;
-  gap: 12px;
-  margin-top: 16px;
-  padding: 12px 14px;
+  gap: 14px;
+  margin-top: 18px;
+  padding: 14px 16px;
   border: 1px solid var(--line);
   border-radius: var(--radius-sm);
-  background: var(--surface-2);
+  background: var(--surface);
   cursor: pointer;
   transition: border-color 120ms ease;
 }
-.toggle-row:hover { border-color: var(--line-2); }
+.toggle-row:hover { border-color: color-mix(in oklab, var(--c-cyan) 30%, var(--line-2)); }
 .toggle-row input[type="checkbox"] {
-  margin: 2px 0 0;
-  width: 16px;
-  height: 16px;
-  accent-color: var(--focus);
+  margin: 3px 0 0;
+  width: 18px;
+  height: 18px;
+  accent-color: var(--c-cyan);
   cursor: pointer;
   flex-shrink: 0;
 }
-.toggle-text { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+.toggle-text { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
 .toggle-title {
-  font-size: 13px;
+  font-size: 14px;
   color: var(--text);
   font-weight: 500;
 }
 .toggle-desc {
-  font-size: 12px;
+  font-size: 13px;
   color: var(--text-3);
-  line-height: 1.45;
+  line-height: 1.5;
 }
 
 .version-line {
-  margin: 14px 0 0;
-  font: 11px/1.4 ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  margin: 16px 0 0;
+  font: 12px/1.4 var(--mono);
   color: var(--text-3);
 }
 
-/* Destructive zone in settings: clearing localStorage is a one-way op,
-   so we set it apart with a top divider and a muted-red action. */
+/* Destructive zone in settings. */
 .settings-danger {
-  margin-top: 18px;
-  padding-top: 16px;
+  margin-top: 20px;
+  padding-top: 18px;
   border-top: 1px solid var(--line);
   display: flex;
   align-items: center;
@@ -571,61 +792,215 @@ kbd {
 .settings-danger-text { flex: 1 1 280px; min-width: 0; }
 .settings-danger-desc {
   margin: 4px 0 0;
-  font-size: 12px;
-  line-height: 1.5;
+  font-size: 13px;
+  line-height: 1.55;
   color: var(--text-3);
 }
 .btn-danger {
-  color: #d97070;
-  border-color: color-mix(in oklab, #d97070 35%, var(--line-2));
-  background: transparent;
+  color: #c33b3b;
+  border-color: color-mix(in oklab, #c33b3b 35%, var(--line-2));
+  background: var(--surface);
 }
 .btn-danger:hover {
-  color: #ff7e7e;
-  border-color: color-mix(in oklab, #d97070 60%, var(--line-2));
-  background: color-mix(in oklab, #d97070 8%, transparent);
+  color: #a82828;
+  border-color: color-mix(in oklab, #c33b3b 60%, var(--line-2));
+  background: color-mix(in oklab, #c33b3b 8%, var(--surface));
 }
 .btn-danger:focus-visible {
-  outline: 2px solid #d97070;
+  outline: 2px solid #c33b3b;
   outline-offset: 2px;
+}
+
+/* ────────── toasts ────────── */
+/* Transient confirmations stack in the bottom-right corner. Pure-CSS
+   slide-in/slide-out; JS just manages the queue and the "in"/"out"
+   classes. The gradient-bordered surface keeps them on-brand without
+   shouting. */
+
+.toast-host {
+  position: fixed;
+  z-index: 100;
+  bottom: 86px;            /* Sits just above the sticky dock. */
+  right: 20px;
+  display: flex;
+  flex-direction: column-reverse;
+  gap: 10px;
+  pointer-events: none;    /* Clicks pass through the host; not the toast. */
+  max-width: calc(100vw - 40px);
+}
+.toast {
+  pointer-events: auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  padding: 11px 16px 11px 14px;
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  border: 1px solid var(--line-2);
+  color: var(--text);
+  font-size: 14px;
+  line-height: 1.4;
+  min-width: 220px;
+  max-width: 380px;
+  box-shadow:
+    0 1px 0 rgba(17, 21, 31, 0.04),
+    0 18px 40px -22px rgba(139, 58, 216, 0.45),
+    0 6px 18px -10px rgba(14, 165, 194, 0.25);
+  transform: translateY(8px);
+  opacity: 0;
+  transition: transform 220ms cubic-bezier(.2,.7,.2,1), opacity 180ms ease;
+  position: relative;
+  overflow: hidden;
+}
+.toast.in  { transform: translateY(0); opacity: 1; }
+.toast.out { transform: translateY(8px); opacity: 0; }
+
+/* Gradient hairline on the left edge — same accent as the result card,
+   so toasts feel like a member of the family. The variant attributes
+   below tweak only the gradient stops, keeping the rest consistent. */
+.toast::before {
+  content: "";
+  position: absolute;
+  left: 0; top: 10px; bottom: 10px;
+  width: 3px;
+  border-radius: 3px;
+  background: var(--grad-brand);
+}
+.toast-icon {
+  width: 18px;
+  height: 18px;
+  flex-shrink: 0;
+  display: grid;
+  place-items: center;
+  font-size: 12px;
+  font-weight: 700;
+  border-radius: 999px;
+  color: #fff;
+  background: var(--c-cyan);
+}
+.toast-text { min-width: 0; }
+.toast-title { display: block; font-weight: 600; color: var(--text); }
+.toast-desc {
+  display: block;
+  margin-top: 2px;
+  font-size: 12px;
+  color: var(--text-3);
+}
+.toast-close {
+  margin-left: 4px;
+  flex-shrink: 0;
+  border: 0;
+  background: transparent;
+  color: var(--text-3);
+  cursor: pointer;
+  font-size: 16px;
+  line-height: 1;
+  padding: 4px 6px;
+  border-radius: 6px;
+  transition: color 120ms ease, background 120ms ease;
+}
+.toast-close:hover { color: var(--text); background: var(--surface-2); }
+.toast-close:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
+}
+
+/* Variants — the icon dot + the gradient stop colors shift, but the
+   shape stays identical. */
+.toast[data-variant="success"] .toast-icon { background: var(--c-cyan); }
+.toast[data-variant="info"]    .toast-icon { background: var(--c-purple); }
+.toast[data-variant="warn"]    .toast-icon { background: var(--c-pink); }
+
+/* Smaller breakpoints: full-width toasts at the bottom so they don't
+   crowd a phone-sized layout. */
+@media (max-width: 540px) {
+  .toast-host {
+    left: 16px;
+    right: 16px;
+    bottom: 80px;
+    max-width: none;
+  }
+  .toast { min-width: 0; width: 100%; max-width: none; }
+}
+
+/* ────────── reduced-motion ────────── */
+
+@media (prefers-reduced-motion: reduce) {
+  .brand-mark .caret,
+  .rec-icon .caret { animation: none; opacity: 1; }
+  .rec-btn[data-state="recording"] .rec-ring,
+  .rec-btn[data-state="uploading"] .rec-ring,
+  .rec-btn[data-state="uploading"] .rec-meter { animation: none; }
+  .rec-meter-bar { transition: none; }
+  .toast { transition: opacity 80ms ease; transform: none; }
+  .toast.in, .toast.out { transform: none; }
 }
 
 /* ────────── responsive ────────── */
 
-@media (max-width: 480px) {
-  .page { padding: 32px 16px 100px; gap: 32px; }
-  .topbar-inner, .dock-inner { padding-left: 16px; padding-right: 16px; }
-  .rec-btn { width: 112px; height: 112px; }
-  .rec-dot { width: 26px; height: 26px; }
-  .result-text { font-size: 16px; }
+@media (max-width: 540px) {
+  .page { padding: 36px 18px 110px; gap: 40px; }
+  .topbar-inner, .dock-inner { padding-left: 18px; padding-right: 18px; }
+  .brand-tag { display: none; }
+  .rec-btn { width: 152px; height: 152px; }
+  .rec-icon svg { width: 78px; height: 40px; }
+  .rec-meter { gap: 6px; }
+  .rec-meter-bar { width: 7px; }
+  .result-text { font-size: 17px; }
+  body { font-size: 15px; }
 }
 
-/* ────────── light mode ────────── */
+/* ────────── dark mode (opt-in via OS setting) ────────── */
 
-@media (prefers-color-scheme: light) {
+@media (prefers-color-scheme: dark) {
   :root {
-    color-scheme: light;
-    --bg:         #fafafb;
-    --surface:    #ffffff;
-    --surface-2:  #f5f6f8;
-    --line:       #e6e8ec;
-    --line-2:     #d8dbe1;
-    --text:       #1a1d22;
-    --text-2:     #4d525c;
-    --text-3:     #8a909a;
-    --accent:     #cf3a3a;
-    --focus:      #3c5cea;
+    color-scheme: dark;
+    --bg:         #0e1220;
+    --surface:    #161a2a;
+    --surface-2:  #1c2034;
+    --surface-3:  #232844;
+    --line:       #252a40;
+    --line-2:     #353a55;
+    --text:       #f1f3f7;
+    --text-2:     #b3b9c5;
+    --text-3:     #7a8094;
+    --c-cyan:     #22d3ee;
+    --c-purple:   #b070f7;
+    --c-pink:     #f472b6;
   }
+  body::before {
+    background:
+      repeating-linear-gradient(90deg,
+        rgba(34, 211, 238, 0.030) 0 1px,
+        transparent 1px 9px),
+      radial-gradient(1400px 900px at 50% -240px,
+        rgba(176, 112, 247, 0.10) 0%,
+        transparent 60%);
+  }
+  .btn { box-shadow: none; background: var(--surface-2); }
+  .btn:hover { background: var(--surface-3); box-shadow: 0 4px 14px -8px rgba(176, 112, 247, 0.4); }
+  .btn-ghost { background: transparent; }
+  .btn-ghost:hover { background: var(--surface-2); }
+  kbd { background: var(--surface-2); box-shadow: none; }
   .rec-btn {
-    background: radial-gradient(circle at 50% 35%, #ffffff 0%, #eef0f4 70%);
+    background: radial-gradient(circle at 50% 30%, var(--surface-3) 0%, var(--surface) 70%);
+    box-shadow:
+      0 1px 0 rgba(0, 0, 0, 0.3),
+      0 14px 38px -22px rgba(176, 112, 247, 0.6),
+      0 6px 16px -10px rgba(34, 211, 238, 0.3);
   }
   .rec-btn[data-state="recording"] {
-    background: radial-gradient(circle at 50% 35%, #fff2f2 0%, #ffe1e1 70%);
+    background: radial-gradient(circle at 50% 30%, #2a1a2e 0%, #16101e 70%);
   }
   .rec-btn[data-state="uploading"] {
-    background: radial-gradient(circle at 50% 35%, #f0f4ff 0%, #dde7ff 70%);
+    background: radial-gradient(circle at 50% 30%, #142030 0%, #0a121e 70%);
   }
-  kbd { background: #fff; box-shadow: 0 1px 0 #d8dbe1; }
-  .btn { background: #fff; }
-  .btn:hover { background: #f3f4f6; }
+  .result-card { background: var(--surface); }
+  .copy-btn { background: transparent; }
+  .copy-btn:hover { background: var(--surface-2); }
+  .field input, .field select { background: var(--surface-2); }
+  .toggle-row { background: var(--surface-2); }
+  .settings-sheet { background: var(--surface); }
+  .btn-danger { background: transparent; color: #f08585; border-color: color-mix(in oklab, #f08585 35%, var(--line-2)); }
+  .btn-danger:hover { background: color-mix(in oklab, #f08585 12%, transparent); color: #ff9999; }
 }

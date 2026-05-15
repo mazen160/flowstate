@@ -25,8 +25,22 @@
     chunks: [],
     mime: '',
     starting: false,
-    state: 'idle' // idle | recording | uploading
+    state: 'idle', // idle | recording | uploading
+    // Live mic-level visualization. The AudioContext + AnalyserNode are
+    // created on demand the first time we record (so we don't trigger an
+    // AudioContext at page load and bump into Chrome's autoplay policy)
+    // and torn down when the stream stops.
+    audioCtx: null,
+    analyser: null,
+    sourceNode: null,
+    rafId: 0,
+    timeData: null
   };
+
+  // METER_BARS must match the count of <span class="rec-meter-bar"> nodes
+  // in index.html. Each bar reads its height from CSS custom property
+  // --lvl0 … --lvl(N-1) on the .rec-btn element.
+  var METER_BARS = 7;
 
   var SESSION_REUSE_MS = 30 * 60 * 1000;
 
@@ -107,15 +121,116 @@
 
   var $ = function (id) { return document.getElementById(id); };
 
+  // ---- Toasts --------------------------------------------------------
+  //
+  // Transient bottom-right confirmations. Each toast is appended to the
+  // host (#toast-host), animated in, and auto-dismissed after a delay.
+  // A small queue cap prevents spam if a user mashes a button.
+
+  var TOAST_MAX = 4;
+  var TOAST_DEFAULT_MS = 2200;
+
+  // showToast(message, opts?) — minimal API.
+  //   message       primary line ("Copied to clipboard")
+  //   opts.desc     optional second line ("44 characters")
+  //   opts.variant  "success" | "info" | "warn"  (default "success")
+  //   opts.icon     glyph for the icon dot (default "✓")
+  //   opts.duration milliseconds before auto-dismiss (default 2200)
+  function showToast(message, opts) {
+    var host = $('toast-host');
+    if (!host) return;
+    opts = opts || {};
+
+    // Cap the queue. Drop the oldest toast(s) so we never stack more
+    // than TOAST_MAX at once; this keeps repeated copies from drifting
+    // up off the screen.
+    while (host.children.length >= TOAST_MAX) {
+      var oldest = host.firstElementChild;
+      if (!oldest) break;
+      dismissToast(oldest);
+    }
+
+    var toast = document.createElement('div');
+    toast.className = 'toast';
+    toast.setAttribute('data-variant', opts.variant || 'success');
+    toast.setAttribute('role', 'status');
+
+    var icon = document.createElement('span');
+    icon.className = 'toast-icon';
+    icon.setAttribute('aria-hidden', 'true');
+    icon.textContent = opts.icon || '✓';
+    toast.appendChild(icon);
+
+    var text = document.createElement('span');
+    text.className = 'toast-text';
+    var title = document.createElement('span');
+    title.className = 'toast-title';
+    title.textContent = message;
+    text.appendChild(title);
+    if (opts.desc) {
+      var desc = document.createElement('span');
+      desc.className = 'toast-desc';
+      desc.textContent = opts.desc;
+      text.appendChild(desc);
+    }
+    toast.appendChild(text);
+
+    var close = document.createElement('button');
+    close.type = 'button';
+    close.className = 'toast-close';
+    close.setAttribute('aria-label', 'Dismiss notification');
+    close.innerHTML = '&times;';
+    close.addEventListener('click', function () { dismissToast(toast); });
+    toast.appendChild(close);
+
+    host.appendChild(toast);
+    // Force a layout flush before adding the "in" class so the CSS
+    // transition runs on first render.
+    void toast.offsetHeight;
+    toast.classList.add('in');
+
+    var ms = typeof opts.duration === 'number' ? opts.duration : TOAST_DEFAULT_MS;
+    if (ms > 0) {
+      toast._dismissTimer = setTimeout(function () { dismissToast(toast); }, ms);
+    }
+    return toast;
+  }
+
+  function dismissToast(toast) {
+    if (!toast || !toast.parentNode) return;
+    if (toast._dismissTimer) { clearTimeout(toast._dismissTimer); toast._dismissTimer = null; }
+    toast.classList.remove('in');
+    toast.classList.add('out');
+    // Remove from the DOM after the slide-out completes. 280 > the 220ms
+    // CSS transition so we're safe even on slower machines.
+    setTimeout(function () {
+      if (toast.parentNode) toast.parentNode.removeChild(toast);
+    }, 280);
+  }
+
   function setRecState(name) {
     REC.state = name;
     var btn = $('rec');
     btn.dataset.state = name === 'idle' ? '' : name;
     btn.setAttribute('aria-pressed', name === 'recording' ? 'true' : 'false');
     var label = '';
-    if (name === 'recording') label = 'Recording…';
-    if (name === 'uploading') label = 'Uploading…';
+    if (name === 'recording') label = '● Recording…';
+    if (name === 'uploading') label = '● Uploading…';
     $('rec-status').textContent = label;
+    // Snap the meter bars to a state-appropriate resting pose so the
+    // visual matches what the CSS expects. This is purely cosmetic;
+    // AnalyserNode teardown happens in stopMeter() once mediaRecorder.onstop
+    // fires and we close the stream.
+    //
+    // - idle: collapse to 0 so the brand mark gets the spotlight.
+    // - uploading: paint a fixed bell curve so the CSS opacity pulse
+    //   has something to animate (tickMeter is no longer running).
+    // - recording: leave as-is; tickMeter will overwrite within ~16ms.
+    if (name === 'idle') {
+      writeMeter([0, 0, 0, 0, 0, 0, 0]);
+    } else if (name === 'uploading') {
+      writeMeter([0.25, 0.45, 0.7, 0.85, 0.7, 0.45, 0.25]);
+    }
   }
 
   function renderSessionLabel() {
@@ -185,6 +300,25 @@
           if (label) label.textContent = origLabel;
           button.removeAttribute('data-state');
         }, 1400);
+        // Confirm the action with a toast as well as the in-button flash.
+        // The toast is the primary affordance for visibility; the button
+        // flash is the local feedback. Showing both is redundant by
+        // design — copy is silent enough that a single subtle signal
+        // gets missed, especially when the button is far from the user's
+        // gaze (history rows, for example).
+        if (ok) {
+          showToast('Copied to clipboard', {
+            desc: text.length === 1 ? '1 character' : (text.length + ' characters'),
+            variant: 'success',
+            icon: '✓'
+          });
+        } else {
+          showToast('Copy failed', {
+            desc: 'Your browser blocked clipboard access.',
+            variant: 'warn',
+            icon: '!'
+          });
+        }
       };
       // navigator.clipboard is available on localhost (secure context
       // exemption) and on https://. Fall back to a textarea-execCommand
@@ -202,31 +336,28 @@
   }
 
   // autoCopyToClipboard runs the same writeText → legacyCopy fallback as
-  // the manual Copy buttons, but with no DOM button to flash. Success
-  // flashes a brief "Copied to clipboard" status on the recorder hint;
-  // failure is silent (we don't want a noisy error every time the
-  // browser denies clipboard access).
+  // the manual Copy buttons, but with no DOM button to flash. We surface
+  // a toast on success so the user has a clear confirmation that the
+  // cleaned text is on the clipboard — exactly the same toast shape the
+  // manual Copy buttons use, so the feedback feels uniform. Failures
+  // stay silent: an auto-copy error every transcription would be noise,
+  // and the user can always copy manually from the result card.
   function autoCopyToClipboard(text) {
-    var statusEl = $('rec-status');
-    var show = function (ok) {
-      if (!ok || !statusEl) return;
-      statusEl.textContent = '✓ Copied to clipboard';
-      // Reset after a moment so the next recording sees a clean status.
-      // The whole notification is best-effort — no need to clear a prior
-      // timer; the final value will resolve to "" within ~1.4s.
-      setTimeout(function () {
-        if (statusEl.textContent === '✓ Copied to clipboard') {
-          statusEl.textContent = '';
-        }
-      }, 1400);
+    var done = function (ok) {
+      if (!ok) return;
+      showToast('Auto-copied to clipboard', {
+        desc: text.length === 1 ? '1 character' : (text.length + ' characters'),
+        variant: 'success',
+        icon: '✓'
+      });
     };
     if (navigator.clipboard && navigator.clipboard.writeText) {
       navigator.clipboard.writeText(text).then(
-        function () { show(true); },
-        function () { show(legacyCopy(text)); }
+        function () { done(true); },
+        function () { done(legacyCopy(text)); }
       );
     } else {
-      show(legacyCopy(text));
+      done(legacyCopy(text));
     }
   }
 
@@ -346,6 +477,99 @@
     renderHistory();
   }
 
+  // ---- Live mic-level meter -----------------------------------------
+  //
+  // The meter is a pure visual layer: 7 bars over the rec-btn whose heights
+  // are driven from an AnalyserNode tap on the live MediaStream. We bucket
+  // the time-domain samples into 7 bands and write each band's amplitude
+  // to a CSS custom property (--lvl0 … --lvl6) that style.css consumes.
+  //
+  // The MediaRecorder is left untouched — both nodes share the same stream
+  // without contention, so the upload pipeline keeps full fidelity.
+
+  // Min/max bar heights in px. Kept in sync with style.css min/max-height
+  // on .rec-meter-bar so the visual cap matches what we tween to.
+  var METER_MIN_PX = 8;
+  var METER_MAX_PX = 56;
+
+  function writeMeter(values) {
+    var btn = $('rec');
+    if (!btn) return;
+    for (var i = 0; i < METER_BARS; i++) {
+      var v = values[i] || 0;                                // 0…1
+      var h = METER_MIN_PX + Math.round(v * (METER_MAX_PX - METER_MIN_PX));
+      btn.style.setProperty('--lvl' + i, h + 'px');
+    }
+  }
+
+  function startMeter(stream) {
+    if (!stream || typeof window.AudioContext === 'undefined' && typeof window.webkitAudioContext === 'undefined') {
+      return;
+    }
+    try {
+      var Ctor = window.AudioContext || window.webkitAudioContext;
+      REC.audioCtx = new Ctor();
+      REC.sourceNode = REC.audioCtx.createMediaStreamSource(stream);
+      REC.analyser = REC.audioCtx.createAnalyser();
+      REC.analyser.fftSize = 1024;            // ~512 time-domain samples
+      REC.analyser.smoothingTimeConstant = 0.6;
+      REC.sourceNode.connect(REC.analyser);   // analyser is a sink, no destination connect
+      REC.timeData = new Uint8Array(REC.analyser.fftSize);
+      tickMeter();
+    } catch (e) {
+      // Best effort. The page still records; we just won't show levels.
+      stopMeter();
+    }
+  }
+
+  function tickMeter() {
+    if (!REC.analyser || REC.state !== 'recording') return;
+    REC.analyser.getByteTimeDomainData(REC.timeData);
+    // Bucket the samples into METER_BARS bands. For each band, take
+    // peak amplitude (deviation from 128, the silent center of u8 PCM).
+    var n = REC.timeData.length;
+    var per = Math.floor(n / METER_BARS) || 1;
+    var levels = new Array(METER_BARS);
+    for (var b = 0; b < METER_BARS; b++) {
+      var start = b * per;
+      var end   = (b === METER_BARS - 1) ? n : start + per;
+      var peak = 0;
+      for (var i = start; i < end; i++) {
+        var dev = Math.abs(REC.timeData[i] - 128);
+        if (dev > peak) peak = dev;
+      }
+      // Normalize to 0…1 with a small floor so silent rooms still show
+      // a hint of life, and a soft ceiling so loud talkers don't clip
+      // the visual.
+      var v = Math.min(1, peak / 96);
+      // Light edge-bias: outermost bars are slightly damped so the meter
+      // reads as a "wave" rather than a flat block.
+      if (b === 0 || b === METER_BARS - 1) v *= 0.7;
+      else if (b === 1 || b === METER_BARS - 2) v *= 0.85;
+      levels[b] = Math.max(0, v);
+    }
+    writeMeter(levels);
+    REC.rafId = window.requestAnimationFrame(tickMeter);
+  }
+
+  function stopMeter() {
+    if (REC.rafId) {
+      window.cancelAnimationFrame(REC.rafId);
+      REC.rafId = 0;
+    }
+    try { if (REC.sourceNode) REC.sourceNode.disconnect(); } catch (e) { /* idempotent */ }
+    try { if (REC.analyser)   REC.analyser.disconnect();   } catch (e) { /* idempotent */ }
+    if (REC.audioCtx && typeof REC.audioCtx.close === 'function') {
+      // close() returns a promise on modern browsers; we don't await it
+      // because failures here are silent (the page is moving on).
+      try { REC.audioCtx.close(); } catch (e) { /* best effort */ }
+    }
+    REC.audioCtx = null;
+    REC.analyser = null;
+    REC.sourceNode = null;
+    REC.timeData = null;
+  }
+
   // ---- Recording / upload -------------------------------------------
 
   function pickMimeAndExt() {
@@ -389,6 +613,11 @@
         else if (actualMime.indexOf('mp4') >= 0) ext = 'mp4';
         else ext = 'webm';
         var blob = new Blob(REC.chunks, { type: actualMime });
+        // Tear down the analyser before we stop the stream — order isn't
+        // strictly necessary (disconnect() is idempotent on dead nodes),
+        // but doing it first keeps the visual disappearance synchronous
+        // with the state change we're about to fire.
+        stopMeter();
         if (REC.stream) {
           REC.stream.getTracks().forEach(function (t) { t.stop(); });
           REC.stream = null;
@@ -397,6 +626,11 @@
       };
       mr.start();
       setRecState('recording');
+      // The meter is created once we know we're actually recording so a
+      // permission prompt or device error doesn't leave a stale audio
+      // context behind. setRecState above flips data-state to "recording"
+      // which makes the .rec-meter visible; startMeter starts driving it.
+      startMeter(stream);
     } catch (err) {
       setRecState('idle');
       $('rec-status').textContent = 'Microphone error: ' + (err && err.message ? err.message : err);
@@ -601,11 +835,27 @@
     $('token-input').addEventListener('change', function () {
       S.token = this.value.trim();
       persist();
+      // Token changes fire on blur (the 'change' event), so each save
+      // is a deliberate user action — toast every time so they know
+      // it landed.
+      showToast('Settings saved', {
+        desc: S.token ? 'API token stored locally.' : 'API token cleared.',
+        variant: 'info',
+        icon: '✓'
+      });
     });
     $('session-select').addEventListener('change', function () {
       S.currentSessionId = this.value;
       persist();
       rerender();
+      var s = currentSession();
+      showToast('Switched session', {
+        desc: s ? ('#' + s.id.slice(0, 6) + ' · ' + s.items.length +
+                   (s.items.length === 1 ? ' transcript' : ' transcripts'))
+                : null,
+        variant: 'info',
+        icon: '↻'
+      });
     });
     // Auto-copy toggle. Initialize from the loaded S.autoCopy so the
     // checkbox state survives a page reload.
@@ -615,6 +865,13 @@
       autoCopyBox.addEventListener('change', function () {
         S.autoCopy = this.checked;
         persist();
+        showToast('Settings saved', {
+          desc: S.autoCopy
+            ? 'Cleaned text will be copied automatically.'
+            : 'Cleaned text will no longer be copied automatically.',
+          variant: 'info',
+          icon: '✓'
+        });
       });
     }
     // Clear-local-data button. Confirms first since this wipes every

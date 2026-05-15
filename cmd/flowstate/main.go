@@ -22,9 +22,13 @@ import (
 )
 
 // version is the build identifier printed by `flowstate version`. The
-// 0.0.x-dev string here is the M9 placeholder; release builds will override
-// it via -ldflags="-X main.version=..." once the release pipeline lands.
-var version = "0.0.1-dev"
+// in-tree default tracks the most recently released version; tagged
+// builds (driven by the Makefile or goreleaser) override it via
+// -ldflags="-X main.version=..." with the actual tag (e.g. v1.0.1).
+// Untagged `make build` from a clean tree reads the latest tag via
+// `git describe --tags`, so this constant only surfaces in builds made
+// without the Makefile.
+var version = "1.0.0"
 
 // helpText is what `flowstate --help` (and `flowstate -h`) prints. Short by
 // design: details live in the man-page-style README, not in --help.

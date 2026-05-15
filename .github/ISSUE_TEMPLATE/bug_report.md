@@ -1,6 +1,6 @@
 ---
 name: Bug report
-about: Report a defect or unexpected behavior in flowstate
+about: Something broke. Help us fix it.
 title: "[bug] "
 labels: bug
 assignees: ""
@@ -12,31 +12,41 @@ assignees: ""
 
 ## Environment
 
-- OS + version (e.g. macOS 15.3, Ubuntu 24.04, Windows 11):
-- Go version (`go version`):
-- flowstate version (`flowstate version`):
+Run this in your shell and paste the output here. It captures the version, OS, and arch in one block:
+
+```sh
+flowstate version && uname -a 2>/dev/null || ver
+```
+
 - Groq model in use (from config or `--model` flag):
 
-## Steps to Reproduce
+## Steps to reproduce
 
 1.
 2.
 3.
 
-## Expected Behavior
+## Expected behavior
 
 <!-- What did you expect to happen? -->
 
-## Actual Behavior
+## Actual behavior
 
-<!-- What actually happened? -->
+<!-- What actually happened? Include the full stderr block if there was an error. -->
 
 ## Logs / stderr
 
 ```
-# paste relevant stderr output, error messages, or logs here
+# paste relevant stderr output, error messages, or status lines here
 ```
 
-## Additional Context
+## Audio sample (optional)
 
-<!-- Anything else that might help: config file, audio device, terminal, etc. -->
+<!-- If the bug is in transcription or cleanup quality, attaching a short WAV / MP3
+     (drag-and-drop into this issue) makes it 10x easier to reproduce. Please
+     redact anything sensitive first. Skip if not applicable. -->
+
+## Additional context
+
+<!-- Anything else that might help: config file (with the API key redacted), audio device,
+     terminal emulator, tmux/screen, etc. -->
