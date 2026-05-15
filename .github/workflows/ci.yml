@@ -44,6 +44,8 @@ jobs:
             libxtst-dev \
             libxinerama-dev \
             libxrandr-dev \
+            libxcb1-dev \
+            libx11-xcb-dev \
             pulseaudio-utils \
             alsa-utils
 

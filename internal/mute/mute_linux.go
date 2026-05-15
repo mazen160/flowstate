@@ -25,12 +25,12 @@ var muteCommands = map[string]struct {
 	unmute []string
 }{
 	"pactl": {
-		mute:   {"set-sink-mute", "@DEFAULT_SINK@", "1"},
-		unmute: {"set-sink-mute", "@DEFAULT_SINK@", "0"},
+		mute:   []string{"set-sink-mute", "@DEFAULT_SINK@", "1"},
+		unmute: []string{"set-sink-mute", "@DEFAULT_SINK@", "0"},
 	},
 	"amixer": {
-		mute:   {"-q", "set", "Master", "mute"},
-		unmute: {"-q", "set", "Master", "unmute"},
+		mute:   []string{"-q", "set", "Master", "mute"},
+		unmute: []string{"-q", "set", "Master", "unmute"},
 	},
 }
 

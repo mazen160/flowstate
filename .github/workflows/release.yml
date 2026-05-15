@@ -45,6 +45,8 @@ jobs:
             libxtst-dev \
             libxinerama-dev \
             libxrandr-dev \
+            libxcb1-dev \
+            libx11-xcb-dev \
             pulseaudio-utils \
             alsa-utils
 
@@ -63,6 +65,14 @@ jobs:
         if: runner.os == 'Windows'
         shell: pwsh
         run: |
+          # Defensive: depending on how `go build -o ./flowstate` resolves
+          # under bash + gnumake on the Windows runner, Go may or may not
+          # auto-append .exe. If we got `flowstate` without the suffix,
+          # rename it so the archive contents and the SHA file are stable
+          # across re-runs.
+          if (-not (Test-Path flowstate.exe) -and (Test-Path flowstate)) {
+              Rename-Item flowstate flowstate.exe
+          }
           $archive = "flowstate_${{ github.ref_name }}_${{ matrix.os_name }}.zip"
           Compress-Archive -Path flowstate.exe, README.md, LICENSE, CHANGELOG.md -DestinationPath $archive
           $hash = (Get-FileHash -Algorithm SHA256 $archive).Hash.ToLower()
