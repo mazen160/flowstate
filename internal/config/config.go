@@ -20,18 +20,21 @@ import (
 // a fallback) by [ResolveAPIKey]. Keeping secrets out of the config file
 // makes them less likely to be checked in or shared accidentally.
 type Config struct {
-	Trigger              string            `toml:"trigger"`
-	PTTKey               string            `toml:"ptt_key"`
-	BaseURL              string            `toml:"base_url"`
-	TranscriptionModel   string            `toml:"transcription_model"`
-	CleanupModel         string            `toml:"cleanup_model"`
-	CleanupFallbackModel string            `toml:"cleanup_fallback_model"`
-	Language             string            `toml:"language"`
-	InputDevice          string            `toml:"input_device"`
-	MuteWhileRecording   bool              `toml:"mute_while_recording"`
-	OutputMode           string            `toml:"output_mode"`
-	ActivePrompt         string            `toml:"active_prompt"`
-	Prompts              map[string]string `toml:"prompts"`
+	Trigger                     string            `toml:"trigger"`
+	PTTKey                      string            `toml:"ptt_key"`
+	BaseURL                     string            `toml:"base_url"`
+	TranscriptionModel          string            `toml:"transcription_model"`
+	CleanupModel                string            `toml:"cleanup_model"`
+	CleanupFallbackModel        string            `toml:"cleanup_fallback_model"`
+	Language                    string            `toml:"language"`
+	OutputLanguage              string            `toml:"output_language"`
+	InputDevice                 string            `toml:"input_device"`
+	MuteWhileRecording          bool              `toml:"mute_while_recording"`
+	OutputMode                  string            `toml:"output_mode"`
+	PreserveClipboardAfterPaste bool              `toml:"preserve_clipboard_after_paste"`
+	ActivePrompt                string            `toml:"active_prompt"`
+	CustomVocabulary            string            `toml:"custom_vocabulary"`
+	Prompts                     map[string]string `toml:"prompts"`
 
 	// warnings is populated during Load for soft issues (e.g. unrecognized
 	// keys surfaced by the TOML decoder). Read via [Config.Warnings].
@@ -43,17 +46,20 @@ type Config struct {
 // freshly-written files (Load preserves whatever the user has on disk).
 func Defaults() Config {
 	return Config{
-		Trigger:              "enter",
-		PTTKey:               "space",
-		BaseURL:              "https://api.groq.com/openai/v1",
-		TranscriptionModel:   "whisper-large-v3",
-		CleanupModel:         "openai/gpt-oss-20b",
-		CleanupFallbackModel: "meta-llama/llama-4-scout-17b-16e-instruct",
-		Language:             "en",
-		InputDevice:          "",
-		MuteWhileRecording:   true,
-		OutputMode:           "stdout,clipboard",
-		ActivePrompt:         "default",
+		Trigger:                     "enter",
+		PTTKey:                      "space",
+		BaseURL:                     "https://api.groq.com/openai/v1",
+		TranscriptionModel:          "whisper-large-v3",
+		CleanupModel:                "openai/gpt-oss-20b",
+		CleanupFallbackModel:        "meta-llama/llama-4-scout-17b-16e-instruct",
+		Language:                    "en",
+		OutputLanguage:              "",
+		InputDevice:                 "",
+		MuteWhileRecording:          true,
+		OutputMode:                  "stdout,clipboard",
+		PreserveClipboardAfterPaste: true,
+		ActivePrompt:                "default",
+		CustomVocabulary:            "",
 	}
 }
 

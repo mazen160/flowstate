@@ -4,6 +4,9 @@ import (
 	"bytes"
 	"strings"
 	"testing"
+	"time"
+
+	"golang.design/x/clipboard"
 )
 
 // TestWrite_StdoutOnly verifies the simplest path: with only Stdout
@@ -76,5 +79,96 @@ func TestWrite_StdoutAndOther_StdoutStillWrites(t *testing.T) {
 			"stdout must receive text regardless of clipboard outcome; got %q",
 			buf.String(),
 		)
+	}
+}
+
+// TestWrite_PreserveClipboard_RestoresWhenUnchanged exercises the happy
+// path: with Paste + PreservePriorClipboard, the prior clipboard
+// contents are saved, the transcript is set + pasted, and after
+// restoreDelay elapses the prior contents are restored. We override
+// restoreDelay so the test runs in milliseconds instead of half a
+// second.
+//
+// Skipped automatically on hosts where clipboard.Init fails (typical
+// for headless CI), because the test depends on a real clipboard
+// surface.
+func TestWrite_PreserveClipboard_RestoresWhenUnchanged(t *testing.T) {
+	if err := initClipboard(); err != nil {
+		t.Skipf("clipboard unavailable: %v", err)
+	}
+
+	// Shorten the restore window for the duration of the test so we
+	// don't sit on the half-second production timer. Restore the
+	// original value on teardown to avoid leaking into sibling tests.
+	prev := restoreDelay
+	restoreDelay = 5 * time.Millisecond
+	t.Cleanup(func() { restoreDelay = prev })
+
+	// Prime the clipboard with the "prior" content the test will
+	// expect to be restored.
+	clipboard.Write(clipboard.FmtText, []byte("before"))
+
+	var buf bytes.Buffer
+	err := WriteWithStdout("hello", Destinations{
+		Paste:                  true,
+		PreservePriorClipboard: true,
+	}, &buf)
+	// We don't fail on err here: on hosts without a working paste
+	// binary the keystroke step may surface an error even though the
+	// clipboard half of the operation completed. The restore path is
+	// gated on a successful paste, so if there is no restore goroutine
+	// we have nothing to assert and can skip.
+	if err != nil {
+		t.Skipf("paste keystroke unavailable on this host: %v", err)
+	}
+
+	clipboardRestoreWG.Wait()
+
+	got := clipboard.Read(clipboard.FmtText)
+	if string(got) != "before" {
+		t.Errorf("clipboard should have been restored to %q; got %q", "before", string(got))
+	}
+}
+
+// TestWrite_PreserveClipboard_LeavesUserCopyAlone covers the
+// don't-stomp-on-the-user case: if the user copies something new
+// between the paste keystroke and the restore tick, the restore
+// goroutine must see the mismatch and bail out instead of stomping on
+// the fresh copy.
+//
+// We simulate "user copied something" by overwriting the clipboard
+// before the restore goroutine wakes up. The restore window is widened
+// to give us a deterministic ordering: write transcript -> overwrite
+// -> wait -> assert.
+func TestWrite_PreserveClipboard_LeavesUserCopyAlone(t *testing.T) {
+	if err := initClipboard(); err != nil {
+		t.Skipf("clipboard unavailable: %v", err)
+	}
+
+	prev := restoreDelay
+	restoreDelay = 50 * time.Millisecond
+	t.Cleanup(func() { restoreDelay = prev })
+
+	clipboard.Write(clipboard.FmtText, []byte("before"))
+
+	var buf bytes.Buffer
+	err := WriteWithStdout("hello", Destinations{
+		Paste:                  true,
+		PreservePriorClipboard: true,
+	}, &buf)
+	if err != nil {
+		t.Skipf("paste keystroke unavailable on this host: %v", err)
+	}
+
+	// Simulate the user copying something else right after paste — the
+	// restore goroutine should observe the mismatch and skip the
+	// restore so this fresh copy survives.
+	clipboard.Write(clipboard.FmtText, []byte("user copied this"))
+
+	clipboardRestoreWG.Wait()
+
+	got := clipboard.Read(clipboard.FmtText)
+	if string(got) != "user copied this" {
+		t.Errorf("user clipboard should be preserved; got %q (want %q)", string(got), "user copied this")
 	}
 }

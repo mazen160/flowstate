@@ -13,6 +13,7 @@ import (
 	"github.com/mazin-ahmed/flowstate/internal/config"
 	"github.com/mazin-ahmed/flowstate/internal/mute"
 	"github.com/mazin-ahmed/flowstate/internal/output"
+	"github.com/mazin-ahmed/flowstate/internal/prompts"
 	"github.com/mazin-ahmed/flowstate/internal/transcribe"
 	"github.com/mazin-ahmed/flowstate/internal/trigger"
 )
@@ -134,6 +135,12 @@ func runRecord(ctx context.Context, args []string, stdin io.Reader, stdout, stde
 		fmt.Fprintf(stderr, "active_prompt %q has no body under [prompts]\n", cfg.ActivePrompt)
 		return 1
 	}
+	// FreeFlow-parity augmentations: translation directive and
+	// high-priority vocabulary block. Both are no-ops when their
+	// driving config field is empty, so the un-customized prompt is
+	// byte-for-byte identical to the [prompts] entry.
+	systemPrompt = prompts.ApplyOutputLanguage(systemPrompt, cfg.OutputLanguage)
+	systemPrompt = prompts.ApplyVocabulary(systemPrompt, cfg.CustomVocabulary)
 	cl := cleanup.NewClient(cleanup.Options{
 		APIKey:        apiKey,
 		BaseURL:       cfg.BaseURL,
@@ -157,9 +164,10 @@ func runRecord(ctx context.Context, args []string, stdin io.Reader, stdout, stde
 	// writer for tests (main wires it to os.Stdout).
 	stdoutOn, clipboardOn, pasteOn := cfg.OutputDestinations()
 	dests := output.Destinations{
-		Stdout:    stdoutOn,
-		Clipboard: clipboardOn,
-		Paste:     pasteOn,
+		Stdout:                 stdoutOn,
+		Clipboard:              clipboardOn,
+		Paste:                  pasteOn,
+		PreservePriorClipboard: cfg.PreserveClipboardAfterPaste,
 	}
 	if err := output.WriteWithStdout(cleaned, dests, stdout); err != nil {
 		fmt.Fprintf(stderr, "output: %v\n", err)

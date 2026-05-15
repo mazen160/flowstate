@@ -43,6 +43,11 @@ cleanup_fallback_model = "meta-llama/llama-4-scout-17b-16e-instruct"
 # Set to "" to let Whisper auto-detect, or "fr", "es", "de", etc. for other languages.
 language = "en"
 
+# Output language for cleanup (translation target). Empty = same as spoken.
+# Example: output_language = "French" — output will be translated to French
+# regardless of what was spoken.
+output_language = ""
+
 # Audio input device. Empty = system default. Use ` + "`flowstate devices`" + ` to list.
 input_device = ""
 
@@ -55,8 +60,20 @@ mute_while_recording = true
 # or the special value "all".
 output_mode = "stdout,clipboard"
 
+# Preserve clipboard after paste. When paste output is enabled and this is
+# true, flowstate saves the current clipboard, sets the transcript, pastes,
+# then restores the previous clipboard ~500ms later. If you copy something
+# else in that window, flowstate leaves your fresh copy alone.
+preserve_clipboard_after_paste = true
+
 # Active prompt key. Must match a key under [prompts] below.
 active_prompt = "default"
+
+# Custom vocabulary: words and phrases to preserve during cleanup.
+# Separate entries with commas, newlines, or semicolons.
+# These are appended to the cleanup system prompt as high-priority spellings.
+custom_vocabulary = """
+"""
 
 [prompts]
 # default — full FreeFlow-style cleanup with self-correction, formatting,

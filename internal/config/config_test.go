@@ -426,6 +426,83 @@ func TestResolveAPIKey_NeitherSet_ReturnsError(t *testing.T) {
 	}
 }
 
+// TestDefaults_NewFields pins the documented defaults for the three
+// FreeFlow-parity settings ported in TASK-131.
+func TestDefaults_NewFields(t *testing.T) {
+	d := Defaults()
+	if d.OutputLanguage != "" {
+		t.Errorf("OutputLanguage default = %q; want \"\"", d.OutputLanguage)
+	}
+	if !d.PreserveClipboardAfterPaste {
+		t.Errorf("PreserveClipboardAfterPaste default = false; want true")
+	}
+	if d.CustomVocabulary != "" {
+		t.Errorf("CustomVocabulary default = %q; want \"\"", d.CustomVocabulary)
+	}
+}
+
+// TestInit_WritesNewFields verifies the rendered config template surfaces
+// the three new field names so users can find and edit them. We only
+// assert presence-by-name — the surrounding comments are documentation
+// and can change without breaking the field contract.
+func TestInit_WritesNewFields(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "config.toml")
+	if err := Init(path, false); err != nil {
+		t.Fatalf("Init: %v", err)
+	}
+	body, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("read: %v", err)
+	}
+	for _, key := range []string{"output_language", "preserve_clipboard_after_paste", "custom_vocabulary"} {
+		if !strings.Contains(string(body), key) {
+			t.Errorf("rendered config missing %q", key)
+		}
+	}
+}
+
+// TestLoad_RoundtripsNewFields writes a hand-rolled config that sets the
+// three new fields, then verifies Load reads them back.
+func TestLoad_RoundtripsNewFields(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "config.toml")
+	body := `
+trigger = "enter"
+ptt_key = "space"
+base_url = "https://api.groq.com/openai/v1"
+transcription_model = "whisper-large-v3"
+cleanup_model = "openai/gpt-oss-20b"
+cleanup_fallback_model = "meta-llama/llama-4-scout-17b-16e-instruct"
+output_mode = "stdout,clipboard,paste"
+mute_while_recording = true
+active_prompt = "default"
+output_language = "French"
+preserve_clipboard_after_paste = false
+custom_vocabulary = """
+alpha
+beta, gamma
+"""
+
+[prompts]
+default = "x"
+`
+	if err := os.WriteFile(path, []byte(body), 0o600); err != nil {
+		t.Fatalf("write: %v", err)
+	}
+	cfg, err := Load(path)
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if cfg.OutputLanguage != "French" {
+		t.Errorf("OutputLanguage = %q; want %q", cfg.OutputLanguage, "French")
+	}
+	if cfg.PreserveClipboardAfterPaste {
+		t.Errorf("PreserveClipboardAfterPaste = true; want false")
+	}
+	if !strings.Contains(cfg.CustomVocabulary, "alpha") || !strings.Contains(cfg.CustomVocabulary, "gamma") {
+		t.Errorf("CustomVocabulary missing expected terms: %q", cfg.CustomVocabulary)
+	}
+}
+
 // TestResolveAPIKey_WhitespaceOnly_ReturnsError makes sure that an env var
 // set to whitespace doesn't accidentally pass as a valid key (which would
 // lead to a useless 401 from Groq later in the pipeline).
