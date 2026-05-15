@@ -5,6 +5,11 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
+
+### Fixed
+- `--device <uid>` no longer panics with `cgo argument has Go pointer to
+  unpinned Go pointer` on Go 1.21+. The DeviceID is now pinned via
+  `runtime.Pinner` for the duration of `malgo.InitDevice`.
 ### Added
 - `output_language` config field — when set, the cleanup pass appends
   FreeFlow's translation directive to the system prompt and outputs in the

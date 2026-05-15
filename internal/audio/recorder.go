@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"runtime"
 	"sync"
 	"unsafe"
 
@@ -97,9 +98,18 @@ func (r *Recorder) Start() error {
 			r.mu.Unlock()
 			return fmt.Errorf("audio: input device %q not found", r.deviceUID)
 		}
-		// Stash the DeviceID on the heap so its pointer remains valid
-		// for the lifetime of the malgo Device.
+		// Stash the DeviceID and pin it so its address can cross the
+		// cgo boundary. Go 1.21+ rejects passing a Go pointer (the
+		// DeviceConfig struct) that itself contains a Go pointer
+		// (DeviceID field) into C without explicit pinning. The pin
+		// must outlive malgo.InitDevice below; ma_device_init copies
+		// the bytes into its own state and doesn't need our pointer
+		// after it returns, so deferring Unpin until Start completes
+		// is safe.
 		stored := id
+		var pinner runtime.Pinner
+		defer pinner.Unpin()
+		pinner.Pin(&stored)
 		deviceConfig.Capture.DeviceID = unsafe.Pointer(&stored)
 	}
 
