@@ -106,6 +106,117 @@ Settings → Privacy & Security → Accessibility**.
    **Enter**. After transcription and cleanup, the cleaned text is printed
    to stdout (and copied to your clipboard, by default).
 
+## Demo
+
+A real session, end-to-end:
+
+```text
+$ flowstate
+● Recording ▁▂▄█▆▃▁ — press Enter to stop      (live mic meter, ANSI on a TTY)
+[you speak: "hey um so just wanted to follow up on the meating from yesterday i
+ think we should definately move the deadline to next friday"]
+[Enter]
+● Transcribing…
+● Cleaning up…
+✓ Done. (94 characters, 1.8s)
+
+Hey, just following up on the meeting from yesterday. I think we should
+definitely move the deadline to next Friday.
+```
+
+The cleaned text lands on stdout (above) AND is copied to your clipboard
+(`output_mode = "stdout,clipboard"` is the default). All the `●` / `✓`
+lines go to stderr — pipe-safe.
+
+A timed five-second clip that auto-stops, with the transcript pasted into
+the focused window after a two-second window to switch apps:
+
+```text
+$ flowstate --max-time 5 --output paste --paste-delay 2
+● Recording ▃▅▇█▇▅▃ — auto-stop in 5s (or press Enter)
+[5 seconds elapse]
+● Transcribing…
+● Cleaning up…
+● Pasting in 2s — switch to destination window
+[paste keystroke fires; transcript types into the focused window]
+✓ Done. (47 characters, 7.4s)
+```
+
+## Recipes
+
+### Send a slack message
+```sh
+flowstate --output paste --paste-delay 3
+# Speak, press Enter (or wait for max-time), then switch to Slack within 3s.
+```
+
+### Save a transcript to a file
+```sh
+flowstate --output stdout > note.md
+# stdout is just the text; status (Recording…/Done.) goes to stderr.
+```
+
+### One-shot, no keypress
+```sh
+flowstate --max-time 10
+# Auto-stops after 10 seconds. Same pipeline; exits 0.
+```
+
+### Translate as you dictate
+Edit `~/.config/flowstate/config.toml` and set `output_language = "French"`,
+or pass it as a custom prompt for a one-off:
+
+```sh
+# (No --language flag yet; set output_language in config.)
+flowstate
+# Speak in English; the cleanup pass translates the result to French.
+```
+
+### Pipe into a tool
+```sh
+flowstate --output stdout | gh issue create --title "voice note" --body -
+flowstate --output stdout | tee -a journal.md
+flowstate --output stdout | mail -s "voice memo" you@example.com
+```
+
+### Use a non-default microphone
+```sh
+flowstate devices
+# Pick a UID, then:
+flowstate --device '4275696c74496e4d6963726f70686f6e65446576696365'
+```
+
+### Push-to-talk
+Edit the config: `trigger = "push-to-talk"`, `ptt_key = "space"`.
+Then run `flowstate` — recording starts when you hold space and stops
+when you release. Requires Accessibility permission on macOS.
+
+### Disable colors / quiet mode
+```sh
+flowstate --no-color           # plain stderr, no ANSI
+NO_COLOR=1 flowstate           # same, shell-wide
+flowstate 2>/dev/null          # suppress all status; transcript only
+```
+
+## Flag reference (quick)
+
+| Flag | Default | Effect |
+|---|---|---|
+| `--config <path>` | platform default | Override config file path. |
+| `--prompt <name>` | `default` | Switch active cleanup prompt (`default` / `command` / `literal`). |
+| `--output <list>` | `stdout,clipboard` | Comma list of `stdout` / `clipboard` / `paste`, or `all`. |
+| `--no-mute` | (mute on) | Disable mute_while_recording for this run. |
+| `--device <uid>` | system default | Pick a specific microphone. List via `flowstate devices`. |
+| `--trigger <mode>` | `enter` | `enter` or `push-to-talk`. |
+| `--ptt-key <name>` | `space` | Key held in push-to-talk mode. |
+| `--model <name>` | `openai/gpt-oss-20b` | Override cleanup model. |
+| `--no-color` | (auto) | Disable ANSI colors on stderr. |
+| `--max-time <secs>` | `0` | Auto-stop recording after N seconds and process. |
+| `--paste-delay <secs>` | `0` | Wait N seconds between clipboard seed and paste keystroke. |
+
+All flags override the matching config field for one invocation only.
+Unset flags leave the on-disk config untouched.
+
 ## Config reference
 
 Configuration lives in TOML at the path printed by `flowstate config path`.

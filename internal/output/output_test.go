@@ -221,7 +221,11 @@ func TestWrite_PasteDelay_ZeroSkipsSleep(t *testing.T) {
 	if err != nil {
 		t.Skipf("paste keystroke unavailable on this host: %v", err)
 	}
-	if elapsed > 200*time.Millisecond {
-		t.Errorf("WriteWithStdout with PasteDelay=0 took %v; expected < 200ms", elapsed)
+	// Threshold is generous because the paste keystroke shells out to
+	// osascript / WScript / xdotool, which can take a few hundred ms
+	// under parallel test load. We only care that the test does NOT see
+	// a delay anywhere near a typical PasteDelay value (>= 1s).
+	if elapsed > 800*time.Millisecond {
+		t.Errorf("WriteWithStdout with PasteDelay=0 took %v; expected well under a typical 1s delay", elapsed)
 	}
 }
