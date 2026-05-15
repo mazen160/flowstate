@@ -281,7 +281,53 @@ kbd {
   justify-content: space-between;
   align-items: center;
   margin-bottom: 10px;
+  gap: 12px;
 }
+.result-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 14px;
+}
+
+/* Compact copy button used on the result card + per-history-item. Shares
+   ghost-button styling vibe with raw-toggle but reads as an action, not
+   a disclosure, so it gets a subtle border + filled icon. */
+.copy-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  background: transparent;
+  border: 1px solid var(--line-2);
+  border-radius: var(--radius-sm);
+  padding: 4px 9px;
+  font: 12px/1 inherit;
+  font-family: inherit;
+  color: var(--text-2);
+  cursor: pointer;
+  transition: border-color 120ms ease, color 120ms ease, background 120ms ease;
+  white-space: nowrap;
+}
+.copy-btn:hover {
+  border-color: #2e333e;
+  color: var(--text);
+  background: var(--surface-2);
+}
+.copy-btn:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
+}
+.copy-btn[data-state="copied"] {
+  border-color: color-mix(in oklab, var(--focus) 50%, transparent);
+  color: var(--focus);
+}
+.copy-icon {
+  display: inline-block;
+  font-size: 13px;
+  line-height: 1;
+  color: var(--text-3);
+}
+.copy-btn:hover .copy-icon { color: var(--text-2); }
+.copy-btn[data-state="copied"] .copy-icon { color: var(--focus); }
 .result-text {
   margin: 0;
   font-size: 17px;
@@ -371,6 +417,14 @@ kbd {
   font-size: 11px;
   color: var(--text-3);
   letter-spacing: 0.02em;
+}
+/* Copy button on a history item is pushed to the right of the row so the
+   timestamp stays anchored to the left. The button keeps its own font
+   stack — don't inherit the monospace meta-row font. */
+.history-meta .copy-btn {
+  margin-left: auto;
+  font-family: -apple-system, BlinkMacSystemFont, "Inter", "Segoe UI", system-ui, sans-serif;
+  letter-spacing: normal;
 }
 .history-meta-dot {
   display: inline-block;

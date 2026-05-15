@@ -158,6 +158,82 @@
     });
   }
 
+  // wireCopy attaches a click handler that copies getText()'s return
+  // value to the clipboard, then flashes a "Copied" state on the button
+  // for ~1.4s. getText is called at click time so the latest value is
+  // always copied (important for the result card, which is restyled on
+  // every transcription).
+  function wireCopy(button, getText) {
+    if (!button) return;
+    var label = button.querySelector('.copy-label');
+    var origLabel = label ? label.textContent : 'Copy';
+    var resetTimer;
+    button.addEventListener('click', function () {
+      var text = getText();
+      if (!text) return;
+      var done = function (ok) {
+        if (resetTimer) clearTimeout(resetTimer);
+        if (label) label.textContent = ok ? 'Copied' : 'Failed';
+        button.setAttribute('data-state', ok ? 'copied' : 'failed');
+        resetTimer = setTimeout(function () {
+          if (label) label.textContent = origLabel;
+          button.removeAttribute('data-state');
+        }, 1400);
+      };
+      // navigator.clipboard is available on localhost (secure context
+      // exemption) and on https://. Fall back to a textarea-execCommand
+      // trick for older browsers — unlikely on a desktop dictation tool
+      // but cheap insurance.
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(text).then(
+          function () { done(true); },
+          function () { done(legacyCopy(text)); }
+        );
+      } else {
+        done(legacyCopy(text));
+      }
+    });
+  }
+
+  // legacyCopy uses the deprecated execCommand path as a last-resort
+  // fallback. Returns true on success.
+  function legacyCopy(text) {
+    try {
+      var ta = document.createElement('textarea');
+      ta.value = text;
+      ta.style.position = 'fixed';
+      ta.style.left = '-9999px';
+      document.body.appendChild(ta);
+      ta.select();
+      var ok = document.execCommand('copy');
+      document.body.removeChild(ta);
+      return ok;
+    } catch (e) {
+      return false;
+    }
+  }
+
+  // makeCopyButton builds the same "Copy" button used on the result
+  // card so per-history-item rows can render one identical to the one
+  // in the HTML template. Returns the wired <button>.
+  function makeCopyButton(getText) {
+    var btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'copy-btn';
+    btn.setAttribute('aria-label', 'Copy cleaned text');
+    var icon = document.createElement('span');
+    icon.className = 'copy-icon';
+    icon.setAttribute('aria-hidden', 'true');
+    icon.textContent = '⧉';
+    var label = document.createElement('span');
+    label.className = 'copy-label';
+    label.textContent = 'Copy';
+    btn.appendChild(icon);
+    btn.appendChild(label);
+    wireCopy(btn, getText);
+    return btn;
+  }
+
   function renderHistory() {
     var s = currentSession();
     var list = $('history-list');
@@ -182,6 +258,11 @@
       var ts = document.createElement('span');
       ts.textContent = fmtHistoryTime(new Date(it.ts));
       meta.appendChild(ts);
+      // Per-item copy button. Closure captures `it` so each row copies
+      // its own cleaned text, not whichever row was added last.
+      (function (item) {
+        meta.appendChild(makeCopyButton(function () { return item.cleaned || ''; }));
+      })(it);
       li.appendChild(meta);
 
       var p = document.createElement('p');
@@ -484,6 +565,13 @@
         resultRaw.hidden = open;
       });
     }
+    // Result-card copy button is also static markup. The getText callback
+    // pulls the cleaned text fresh on each click so it always copies the
+    // latest transcript, not whatever was here when bindUI ran.
+    wireCopy($('result-copy'), function () {
+      var el = $('result-cleaned');
+      return el ? el.textContent : '';
+    });
   }
 
   async function loadInfo() {

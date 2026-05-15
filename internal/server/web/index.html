@@ -51,9 +51,15 @@
   <section id="result" class="result-card" hidden>
     <div class="result-header">
       <span class="section-label">Latest</span>
-      <button class="raw-toggle" id="result-raw-toggle" type="button" aria-expanded="false">
-        Show raw
-      </button>
+      <div class="result-actions">
+        <button class="copy-btn" id="result-copy" type="button" aria-label="Copy cleaned text">
+          <span class="copy-icon" aria-hidden="true">⧉</span>
+          <span class="copy-label">Copy</span>
+        </button>
+        <button class="raw-toggle" id="result-raw-toggle" type="button" aria-expanded="false">
+          Show raw
+        </button>
+      </div>
     </div>
     <p id="result-cleaned" class="result-text"></p>
     <p id="result-raw" class="result-raw" hidden></p>
