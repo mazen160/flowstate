@@ -212,6 +212,31 @@ Each release archive ships with a per-platform SHA-256 checksum file (`.sha256`)
 
 </details>
 
+<details>
+<summary><b>Build from source (any platform)</b></summary>
+
+Works before the first tag lands on the module proxy, or when you want to track `main` directly. The system-level prerequisites (Xcode CLT on macOS, the apt packages on Linux, MSVC/mingw on Windows) are the same as for `go install` above.
+
+```sh
+git clone https://github.com/mazen160/flowstate.git
+cd flowstate
+make build              # produces ./flowstate
+./flowstate version
+
+# Or install straight onto your PATH:
+make install            # → $(go env GOPATH)/bin/flowstate
+```
+
+If `make build` isn't available, the equivalent raw command is:
+
+```sh
+go build -o flowstate ./cmd/flowstate
+```
+
+`make build` is preferred because it bakes the current `git describe --tags` value into the binary so `flowstate version` reports something meaningful. A pure `go build` falls back to the in-tree default version string.
+
+</details>
+
 ## Quickstart
 
 ```sh
@@ -278,11 +303,15 @@ The web UI is a thin client over a minimal JSON API. You can call these directly
 | `GET`  | `/api/info`       | `{"version": "...", "auth_required": true|false}`. The frontend reads this once on load to decide whether to show the token field. |
 | `POST` | `/api/transcribe` | Multipart upload. One field: `audio` (the recorded blob, any browser-supported codec). Returns `{"raw": "...", "cleaned": "...", "duration_ms": 1234}`. |
 
-Auth is a single Bearer token. When `--web-token` (or `FLOWSTATE_WEB_TOKEN`) is set, every `/api/*` request must carry `Authorization: Bearer <token>` or it returns `401`.
+Auth is a single Bearer token. When `--web-token` (or `FLOWSTATE_WEB_TOKEN`) is set, `/api/transcribe` requires `Authorization: Bearer <token>`. `/api/health` and `/api/info` are intentionally **always public** — the frontend reads `/api/info` to discover whether auth is required, and `/health` is a probe endpoint kept reachable for liveness checks.
 
 ```sh
-# Health check
+# Health check (always works, no token)
 curl http://127.0.0.1:8585/api/health
+
+# Discover auth state (always works, no token)
+curl http://127.0.0.1:8585/api/info
+# {"version": "1.0.0", "auth_required": true}
 
 # Transcribe a clip
 curl -X POST http://127.0.0.1:8585/api/transcribe \
@@ -290,7 +319,9 @@ curl -X POST http://127.0.0.1:8585/api/transcribe \
      -F "audio=@clip.webm"
 ```
 
-Status codes for `/api/transcribe`:
+`POST /api/transcribe` is rate-limited to **30 requests per minute per source IP** — far above interactive use, low enough to bound runaway Groq spend if the API is exposed on a LAN. The response carries `Retry-After: 60` when the limit fires.
+
+Every non-success response shares the shape `{"error": "<friendly message>"}`. Status codes for `/api/transcribe`:
 
 | Code | Meaning |
 |---|---|
@@ -300,7 +331,8 @@ Status codes for `/api/transcribe`:
 | `405` | Non-`POST` to `/api/transcribe`. |
 | `413` | Upload exceeded 25 MiB (Groq's transcription cap). |
 | `415` | `audio` field missing from the multipart body. |
-| `500` | Groq returned an error. The body's `error` field carries the friendly message. |
+| `429` | Too many requests from this source IP within the last 60 seconds. Honor `Retry-After`. |
+| `500` | Groq returned an error. The body's `error` field carries the friendly message when it's a documented upstream failure (auth, quota, payload size); for transport-level errors the body is the generic `"upstream request failed; check the server log for details"` and the full error is logged to the server's stderr. |
 
 </details>
 

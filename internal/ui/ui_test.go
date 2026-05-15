@@ -296,12 +296,12 @@ func TestCountWords(t *testing.T) {
 // but the formula must be stable across builds.
 func TestEstimateTokens(t *testing.T) {
 	cases := map[string]int{
-		"":      0,
-		"a":     1, // 1/4 → ceil = 1
-		"ab":    1,
-		"abc":   1,
-		"abcd":  1,
-		"abcde": 2,
+		"":                       0,
+		"a":                      1, // 1/4 → ceil = 1
+		"ab":                     1,
+		"abc":                    1,
+		"abcd":                   1,
+		"abcde":                  2,
 		strings.Repeat("x", 16):  4,
 		strings.Repeat("x", 100): 25,
 	}

@@ -102,8 +102,8 @@ func NewClient(opts Options) *Client {
 // keep the JSON structure minimal and explicit so any future drift in the
 // API shape (extra fields, renamed fields) is easy to spot when debugging.
 type transcriptionResponse struct {
-	Text     string                  `json:"text"`
-	Segments []transcriptionSegment  `json:"segments"`
+	Text     string                 `json:"text"`
+	Segments []transcriptionSegment `json:"segments"`
 }
 
 // transcriptionSegment captures only the no_speech_prob field. It uses a

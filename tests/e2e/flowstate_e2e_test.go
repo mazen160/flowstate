@@ -365,3 +365,108 @@ func writeFixtureWAV(path string) error {
 	}
 	return nil
 }
+
+// TestFlowstateE2E_FullBinaryPipeline drives the built binary through the
+// FULL record pipeline end-to-end: it builds the binary, stands up an
+// httptest mock for Groq, writes a temp config that points the binary at
+// the mock, and invokes `./flowstate --wav-source <fixture>` with an
+// output_mode that lands the cleaned transcript on stdout. The hidden
+// --wav-source flag lets the test bypass real microphone capture; every
+// other step of the orchestrator (load config → resolve API key →
+// transcribe → cleanup → output) runs exactly as it would for a real user.
+//
+// The previous two e2e tests cover the CLI surface (version/config/etc.)
+// and the wire-level Groq integration via package-level imports. This
+// one is the missing layer: a regression in cmd/flowstate/record.go that
+// breaks the pipeline wiring (e.g. swapping the transcribe and cleanup
+// client constructors) would surface here even if every internal package
+// test passes.
+func TestFlowstateE2E_FullBinaryPipeline(t *testing.T) {
+	if _, err := exec.LookPath("go"); err != nil {
+		t.Skip("go toolchain not on PATH; skipping e2e binary build")
+	}
+
+	bin := buildBinary(t)
+
+	// Mock Groq endpoints. Same canned content as TestFlowstateE2E_WireLevelGroq
+	// — keeps the two tests assert against the same expected output so a
+	// reader can tell at a glance that the binary path produces the same
+	// result as the library path.
+	const cannedRaw = "this is a binary e2e probe"
+	const cannedCleaned = "This is a binary E2E probe."
+	mux := http.NewServeMux()
+	mux.HandleFunc("/audio/transcriptions", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"text":"` + cannedRaw + `","segments":[{"no_speech_prob":0.01}]}`))
+	})
+	mux.HandleFunc("/chat/completions", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"choices":[{"message":{"content":"` + cannedCleaned + `"}}]}`))
+	})
+	upstream := httptest.NewServer(mux)
+	defer upstream.Close()
+
+	// Fixture: a real WAV file on disk that --wav-source can hand to the
+	// transcribe client. The bytes never reach a real decoder (Groq is
+	// mocked) but a valid 44-byte header keeps the file looking realistic.
+	tmpDir := t.TempDir()
+	wavPath := filepath.Join(tmpDir, "fixture.wav")
+	if err := writeFixtureWAV(wavPath); err != nil {
+		t.Fatalf("writeFixtureWAV: %v", err)
+	}
+
+	// Config pointing at the mock. output_mode = stdout keeps the test
+	// hermetic — no clipboard init, no paste keystroke, no real output
+	// destination beyond the captured CombinedOutput from runBinary.
+	// mute_while_recording = false so the test doesn't muck with the
+	// host's audio output during the run.
+	cfgPath := filepath.Join(tmpDir, "flowstate.toml")
+	cfg := `
+trigger = "enter"
+ptt_key = "space"
+base_url = "` + upstream.URL + `"
+transcription_model = "whisper-large-v3"
+cleanup_model = "openai/gpt-oss-20b"
+cleanup_fallback_model = "meta-llama/llama-4-scout-17b-16e-instruct"
+language = "en"
+output_language = ""
+input_device = ""
+mute_while_recording = false
+output_mode = "stdout"
+preserve_clipboard_after_paste = false
+active_prompt = "default"
+custom_vocabulary = ""
+colors = "never"
+
+[prompts]
+default = "test-default"
+command = "test-command"
+literal = "test-literal"
+`
+	if err := os.WriteFile(cfgPath, []byte(cfg), 0o600); err != nil {
+		t.Fatalf("write config: %v", err)
+	}
+
+	// Drive the full pipeline.
+	out, code := runBinary(t, bin, []string{
+		"GROQ_API_KEY=test-key",
+		"NO_COLOR=1",
+	}, "--config", cfgPath, "--wav-source", wavPath)
+
+	if code != 0 {
+		t.Fatalf("flowstate full-pipeline exit code = %d, want 0\noutput:\n%s", code, out)
+	}
+
+	// stdout must contain the cleaned text. Combined output mixes
+	// stderr-bound status lines with the stdout transcript, so we just
+	// check substring membership rather than expecting exact equality.
+	if !strings.Contains(out, cannedCleaned) {
+		t.Fatalf("expected cleaned transcript %q in output, got:\n%s", cannedCleaned, out)
+	}
+	// Sanity: the raw transcript must NOT appear on stdout — it's only
+	// exposed through the cleanup pass. (It MAY appear in a debug log
+	// somewhere, but the binary's stdout/stderr never carry it today.)
+	if strings.Contains(out, cannedRaw) {
+		t.Fatalf("raw transcript leaked into output (should only surface cleaned):\n%s", out)
+	}
+}

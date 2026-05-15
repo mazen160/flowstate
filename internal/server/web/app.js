@@ -636,9 +636,36 @@
       startMeter(stream);
     } catch (err) {
       setRecState('idle');
-      $('rec-status').textContent = 'Microphone error: ' + (err && err.message ? err.message : err);
+      $('rec-status').textContent = friendlyMicError(err);
     } finally {
       REC.starting = false;
+    }
+  }
+
+  // friendlyMicError maps the DOMException name from getUserMedia to a
+  // short user-facing line. The native messages from Chrome/Firefox/Safari
+  // are inconsistent ("Permission denied", "Permission dismissed",
+  // "The request is not allowed by the user agent…"); the name field is
+  // standardized. Returning a single sentence keeps it readable in the
+  // small status line below the record button.
+  function friendlyMicError(err) {
+    if (!err) return 'Microphone unavailable.';
+    var name = err.name || '';
+    switch (name) {
+      case 'NotAllowedError':
+      case 'SecurityError':
+        return 'Microphone access denied — allow it in your browser settings, then try again.';
+      case 'NotFoundError':
+      case 'OverconstrainedError':
+        return 'No microphone found. Plug one in or pick a different input device.';
+      case 'NotReadableError':
+        return 'Microphone is in use by another app. Close it and try again.';
+      case 'AbortError':
+        return 'Microphone request was aborted. Try again.';
+      case 'TypeError':
+        return 'Recording is not supported in this browser. Try a recent Chrome, Firefox, or Safari.';
+      default:
+        return 'Microphone error: ' + (err.message || name || 'unknown');
     }
   }
 
@@ -891,6 +918,18 @@
       var open = !s.hidden;
       s.hidden = open;
       this.setAttribute('aria-expanded', open ? 'false' : 'true');
+      // When opening (open was true → we just flipped to !hidden), move
+      // focus into the drawer so keyboard users can immediately tab
+      // through it. We focus the token input because it's the field
+      // most users came here to edit. The setTimeout deferral lets the
+      // browser apply the unhide before we focus — otherwise some
+      // browsers refuse to focus a still-hidden element.
+      if (open) {
+        var tokenInput = $('token-input');
+        if (tokenInput) {
+          setTimeout(function () { tokenInput.focus({ preventScroll: false }); }, 0);
+        }
+      }
     });
     $('token-input').value = S.token;
     $('token-input').addEventListener('change', function () {

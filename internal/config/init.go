@@ -177,10 +177,11 @@ func renderDefault() (string, error) {
 }
 
 // tomlMultiline encodes s as a TOML multiline string. It prefers the
-// literal form ('''...''') because that form preserves bytes verbatim — no
-// backslash escapes, no whitespace folding. It falls back to a basic
-// multiline string ("""...""") with the minimal escaping required if the
-// payload itself contains a '''.
+// literal form (the triple-single-quote variant) because that form
+// preserves bytes verbatim — no backslash escapes, no whitespace folding.
+// It falls back to a basic multiline string (the triple-double-quote
+// variant) with the minimal escaping required when the payload itself
+// contains a triple-single-quote sequence.
 //
 // A leading newline is inserted directly after the opening delimiter so the
 // first line of the prompt isn't on the same line as the delimiter. TOML

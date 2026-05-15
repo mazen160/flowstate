@@ -22,8 +22,8 @@ import (
 )
 
 var (
-	muteMu     sync.Mutex
-	mutedByUs  bool
+	muteMu    sync.Mutex
+	mutedByUs bool
 )
 
 // Mute mutes the system audio output. Best-effort: if no supported tool

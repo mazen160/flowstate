@@ -88,6 +88,24 @@ linked design docs that explain the rationale behind the current code.
 
 Release process is documented in `docs/RELEASING.md`.
 
+### Upstream reference (FreeFlow)
+
+flowstate's pipeline (recording format, Whisper request shape, hallucination
+filter, cleanup prompt, output language directive, vocabulary block) is a
+direct port of the Swift app [FreeFlow](https://github.com/zachlatta/freeflow).
+The repo's `.gitignore` excludes `tests/freeflow/` so the upstream source
+doesn't ride along in our git history, but several design docs and code
+comments reference specific lines in it. If you want that reference locally:
+
+```sh
+git clone https://github.com/zachlatta/freeflow tests/freeflow
+```
+
+The clone is read-only; flowstate never imports or modifies it. If a
+behavior question comes up about prompt text or wire format, the answer
+usually lives in `tests/freeflow/Sources/PostProcessingService.swift` or
+`TranscriptionService.swift`.
+
 ## Reporting bugs and requesting features
 
 Use the GitHub issue templates under `.github/ISSUE_TEMPLATE/` so we have the

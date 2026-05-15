@@ -120,32 +120,53 @@ func runRecord(ctx context.Context, args []string, stdin io.Reader, stdout, stde
 		defer func() { _ = mute.Unmute() }()
 	}
 
-	// 6. Construct recorder. Open happens in Start, so this only fails on
-	//    "internal precondition" errors that the package never returns in
-	//    practice — we still check for completeness.
-	recorder, err := audio.NewRecorder(cfg.InputDevice)
-	if err != nil {
-		reporter.Error("audio: %v", err)
-		return 1
-	}
-
-	// 7/8. Construct trigger and start capture. runCapture returns the
-	// duration spent actually recording so the final Done line can split
-	// "rec X · proc Y · total Z". Anything before runCapture (config load,
-	// mute, recorder construction) is fast enough not to need its own
-	// bucket; we treat it as effectively zero.
-	wavPath, recDur, err := runCapture(ctx, cfg, recorder, reporter, stdin, stderr)
-	if err != nil {
-		reporter.Error("%v", err)
-		return 1
-	}
-	// Defer wav cleanup AFTER we know the path — capture may have returned
-	// an empty path on error and there's nothing to remove in that case.
-	defer func() {
-		if wavPath != "" {
-			_ = os.Remove(wavPath)
+	// 6. Capture audio — or, in the hidden --wav-source test path, skip
+	// capture entirely and use a pre-recorded WAV file as the
+	// transcription input. The flag is a test affordance for tests/e2e:
+	// it lets the binary run end-to-end against a mock Groq without a
+	// real microphone or any OS audio permissions. Production users
+	// have no reason to use it (it's also undocumented in --help).
+	var (
+		wavPath string
+		recDur  time.Duration
+	)
+	if rf.wavSource != "" {
+		if _, statErr := os.Stat(rf.wavSource); statErr != nil {
+			reporter.Error("wav-source: %v", statErr)
+			return 1
 		}
-	}()
+		// Skip mute (no real recording is happening) and skip the
+		// recorder + trigger entirely. Caller-supplied path is used
+		// as-is; we do NOT remove it on exit since the caller owns it.
+		wavPath = rf.wavSource
+	} else {
+		recorder, rerr := audio.NewRecorder(cfg.InputDevice)
+		if rerr != nil {
+			reporter.Error("audio: %v", rerr)
+			return 1
+		}
+		// 7/8. Construct trigger and start capture. runCapture returns
+		// the duration spent actually recording so the final Done line
+		// can split "rec X · proc Y · total Z". Anything before
+		// runCapture (config load, mute, recorder construction) is
+		// fast enough not to need its own bucket; we treat it as
+		// effectively zero.
+		var rerr2 error
+		wavPath, recDur, rerr2 = runCapture(ctx, cfg, recorder, reporter, stdin, stderr)
+		if rerr2 != nil {
+			reporter.Error("%v", rerr2)
+			return 1
+		}
+		// Defer wav cleanup AFTER we know the path — capture may have
+		// returned an empty path on error and there's nothing to remove
+		// in that case. Skipped on the wav-source path so we don't
+		// nuke the caller's fixture.
+		defer func() {
+			if wavPath != "" {
+				_ = os.Remove(wavPath)
+			}
+		}()
+	}
 
 	// procStart bookends the processing phase: transcribe + cleanup +
 	// output. It begins the moment recording stops, so the user-facing

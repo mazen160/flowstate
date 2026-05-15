@@ -523,8 +523,8 @@ func TestValidate_Colors(t *testing.T) {
 		{"auto", false},
 		{"always", false},
 		{"never", false},
-		{"", false},        // legacy configs: empty → treated as auto at runtime.
-		{"AUTO", true},     // case-sensitive.
+		{"", false},    // legacy configs: empty → treated as auto at runtime.
+		{"AUTO", true}, // case-sensitive.
 		{"sometimes", true},
 		{"on", true},
 	}
@@ -651,10 +651,10 @@ func TestValidate_MaxTimeSeconds(t *testing.T) {
 		max     int
 		wantErr bool
 	}{
-		{0, false},  // disabled
-		{5, false},  // typical
+		{0, false},   // disabled
+		{5, false},   // typical
 		{600, false}, // 10 minutes — arbitrary upper-realm sanity
-		{-1, true},  // negative is meaningless
+		{-1, true},   // negative is meaningless
 		{-300, true},
 	}
 	for _, tc := range cases {

@@ -10,7 +10,7 @@ import (
 // recordFlags is the parsed CLI flags for the default record command. Each
 // override field uses the standard flag package's pointer-return form so we
 // can tell "user didn't pass --foo" (Visit() never visited it) from "user
-// passed --foo='' (empty string)". applyFlags below uses that distinction
+// passed --foo with an empty string". applyFlags below uses that distinction
 // to decide whether to overwrite the config field.
 type recordFlags struct {
 	configPath string
@@ -24,6 +24,15 @@ type recordFlags struct {
 	noColor    bool
 	maxTime    int
 	pasteDelay int
+
+	// wavSource is a HIDDEN test affordance. When set to a non-empty path,
+	// runRecord skips the audio capture step entirely and uses that WAV
+	// file as the transcription input. Intended for the end-to-end test
+	// (tests/e2e) so it can exercise the full binary pipeline against a
+	// fake Groq without needing a real microphone or any OS audio
+	// permissions. NOT documented in --help; production users have no
+	// reason to use it.
+	wavSource string
 
 	// set is populated from fs.Visit so applyFlags can distinguish unset
 	// from explicit-empty. Keys are the long flag names (without the
@@ -51,6 +60,11 @@ func newRecordFlagSet(stderr io.Writer) (*flag.FlagSet, *recordFlags) {
 	fs.BoolVar(&rf.noColor, "no-color", false, "Disable ANSI colors in status output (equivalent to colors=\"never\").")
 	fs.IntVar(&rf.maxTime, "max-time", 0, "Auto-stop recording after N seconds and process. 0 disables (default).")
 	fs.IntVar(&rf.pasteDelay, "paste-delay", 0, "Wait N seconds between clipboard seed and paste keystroke. 0 = immediate (default).")
+	// --wav-source is a hidden test affordance. Registered with the
+	// flag set so Parse accepts it, but absent from helpText so users
+	// don't accidentally discover it. The fact-finding test under
+	// tests/e2e drives the full binary through this path.
+	fs.StringVar(&rf.wavSource, "wav-source", "", "")
 
 	return fs, rf
 }

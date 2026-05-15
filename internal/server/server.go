@@ -89,6 +89,11 @@ type Server struct {
 	readyOnce    sync.Once
 	ready        chan struct{}
 	resolvedAddr string
+
+	// rateLimiter throttles /api/transcribe per source IP. Constructed
+	// once at New time and shared across all transcribe requests so the
+	// sliding-window state persists for the life of the process.
+	rateLimiter *ipRateLimiter
 }
 
 // New wires the routes (assets + JSON API) into a freshly-allocated
@@ -99,8 +104,9 @@ func New(opts Options) *Server {
 	}
 
 	s := &Server{
-		opts:  opts,
-		ready: make(chan struct{}),
+		opts:        opts,
+		ready:       make(chan struct{}),
+		rateLimiter: newIPRateLimiter(),
 	}
 	mux := http.NewServeMux()
 	s.registerRoutes(mux)
@@ -157,10 +163,20 @@ func (s *Server) registerRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("/", s.handleIndex)
 	mux.Handle("/static/", http.StripPrefix("/static/", s.staticHandler()))
 
-	// JSON API. The auth middleware is a no-op when Token is empty.
-	mux.Handle("/api/health", s.authMiddleware(http.HandlerFunc(s.handleHealth)))
-	mux.Handle("/api/info", s.authMiddleware(http.HandlerFunc(s.handleInfo)))
-	mux.Handle("/api/transcribe", s.authMiddleware(http.HandlerFunc(s.handleTranscribe)))
+	// JSON API.
+	//
+	// /api/health and /api/info are public metadata: no auth, no rate
+	// limit. The frontend hits /api/info on every page load to decide
+	// whether to surface the "API token" input — that would be a
+	// chicken-and-egg lock-out if it were gated. Health is a probe
+	// endpoint deliberately kept reachable for liveness checks.
+	mux.Handle("/api/health", http.HandlerFunc(s.handleHealth))
+	mux.Handle("/api/info", http.HandlerFunc(s.handleInfo))
+	// /api/transcribe is the only request path that spends Groq tokens
+	// and accesses user audio. Both layers wrap it: auth (no-op when
+	// Token is empty) and per-IP rate limiting (always on).
+	mux.Handle("/api/transcribe",
+		s.authMiddleware(s.rateLimitMiddleware(http.HandlerFunc(s.handleTranscribe))))
 }
 
 // Addr returns the host:port string the server is bound to. Before the

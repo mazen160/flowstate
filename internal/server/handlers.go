@@ -3,6 +3,7 @@ package server
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
 	"path/filepath"
 	"strings"
@@ -99,7 +100,7 @@ func (s *Server) handleInfo(w http.ResponseWriter, r *http.Request) {
 //   - 413 — upload exceeded maxUploadBytes.
 //   - 415 — "audio" form field present but not a file.
 //   - 500 — Groq error. The error message is propagated but stripped of
-//           any wrapping that might leak internal context.
+//     any wrapping that might leak internal context.
 //
 // The server never persists the upload: the temp buffer lives in memory
 // only for the duration of the request.
@@ -157,12 +158,15 @@ func (s *Server) handleTranscribe(w http.ResponseWriter, r *http.Request) {
 
 	// 1. Transcribe. The Groq client owns its own timeout (20s); we
 	// just hand it the request context so a client disconnect bubbles
-	// through. Errors here are propagated as 500 with the friendly
-	// message the transcribe package already produces.
+	// through. The transcribe package returns user-friendly mapped
+	// messages for HTTP errors (401/403/413/429/5xx); for everything
+	// else (network failures, JSON parse, etc.) the raw err.Error()
+	// can contain internal URLs or stack-like details — keep those off
+	// the wire and surface them only on the server's stderr log.
 	raw, err := s.opts.Transcribe.TranscribeReader(r.Context(), file, filename)
 	if err != nil {
-		writeJSONError(w, http.StatusInternalServerError,
-			"transcribe: "+err.Error())
+		fmt.Fprintf(s.opts.Stderr, "flowstate: transcribe error: %v\n", err)
+		writeJSONError(w, http.StatusInternalServerError, sanitizeUpstreamError(err))
 		return
 	}
 
@@ -185,8 +189,8 @@ func (s *Server) handleTranscribe(w http.ResponseWriter, r *http.Request) {
 	cleaned, err := s.opts.Cleanup.Clean(r.Context(),
 		s.opts.SystemPrompt, raw, s.opts.ContextSummary)
 	if err != nil {
-		writeJSONError(w, http.StatusInternalServerError,
-			"cleanup: "+err.Error())
+		fmt.Fprintf(s.opts.Stderr, "flowstate: cleanup error: %v\n", err)
+		writeJSONError(w, http.StatusInternalServerError, sanitizeUpstreamError(err))
 		return
 	}
 
@@ -211,4 +215,45 @@ func isMaxBytesError(err error) bool {
 		return true
 	}
 	return strings.Contains(err.Error(), "request body too large")
+}
+
+// sanitizeUpstreamError filters an upstream error into a message safe to
+// return to an unauthenticated client. Internal/transcribe and
+// internal/cleanup both produce user-friendly mapped messages for
+// HTTP-level failures (401/403/404/413/429/5xx) which we want to
+// pass through verbatim — but their wrappers can also surface raw URLs,
+// transport errors, or JSON-decode complaints that leak the upstream
+// host or path. The full error is always logged via the calling
+// handler's stderr; this helper just decides what the *client* sees.
+//
+// Today the policy is: surface the friendly mapped messages verbatim,
+// and substitute a generic "transcription failed; please retry" for
+// everything else. The detection is heuristic (string substring match
+// on the canonical phrases) but accurate against the current
+// internal/transcribe and internal/cleanup messages — if those evolve,
+// either keep the phrases in sync or graduate to a typed-error API.
+func sanitizeUpstreamError(err error) string {
+	if err == nil {
+		return ""
+	}
+	msg := err.Error()
+	// Phrases produced by the internal/{transcribe,cleanup}/errors.go
+	// mapHTTPError tables. Any one of these matches makes the message
+	// safe to surface — the upstream host name is intentionally part
+	// of these strings, e.g. "Invalid API key for api.groq.com".
+	safePhrases := []string{
+		"Invalid API key for",
+		"lacks permission",
+		"Endpoint not found",
+		"Audio too large",
+		"Rate limited",
+		"Provider error at",
+		"Request failed at",
+	}
+	for _, p := range safePhrases {
+		if strings.Contains(msg, p) {
+			return msg
+		}
+	}
+	return "upstream request failed; check the server log for details"
 }

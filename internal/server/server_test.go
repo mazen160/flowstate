@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"io"
 	"mime/multipart"
 	"net/http"
@@ -75,11 +76,11 @@ func minimalWAV() []byte {
 	buf.Write([]byte{36 + 8, 0, 0, 0})
 	buf.WriteString("WAVE")
 	buf.WriteString("fmt ")
-	buf.Write([]byte{16, 0, 0, 0})          // chunk size
-	buf.Write([]byte{1, 0, 1, 0})           // PCM, mono
-	buf.Write([]byte{0x80, 0x3e, 0, 0})     // 16000 Hz
-	buf.Write([]byte{0x00, 0x7d, 0, 0})     // 32000 byte rate
-	buf.Write([]byte{2, 0, 16, 0})          // block align, bits
+	buf.Write([]byte{16, 0, 0, 0})      // chunk size
+	buf.Write([]byte{1, 0, 1, 0})       // PCM, mono
+	buf.Write([]byte{0x80, 0x3e, 0, 0}) // 16000 Hz
+	buf.Write([]byte{0x00, 0x7d, 0, 0}) // 32000 byte rate
+	buf.Write([]byte{2, 0, 16, 0})      // block align, bits
 	buf.WriteString("data")
 	buf.Write([]byte{8, 0, 0, 0})
 	buf.Write(make([]byte, 8))
@@ -339,5 +340,143 @@ func TestServer_InfoAuthRequired(t *testing.T) {
 	}
 	if !info.AuthRequired {
 		t.Errorf("auth_required = false; want true when Token is set")
+	}
+}
+
+// TestServer_HealthBypassesAuth pins the post-TASK-144 contract: /api/health
+// is never gated, even when --web-token is set. Liveness probes and the
+// frontend's first request must succeed without prior credentials.
+func TestServer_HealthBypassesAuth(t *testing.T) {
+	upstream := fakeGroq(t)
+	defer upstream.Close()
+	s := newTestServer(t, upstream.URL, "secret")
+	base, _ := startListening(t, s)
+
+	resp, err := http.Get(base + "/api/health")
+	if err != nil {
+		t.Fatalf("GET /api/health: %v", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("status = %d, want 200 (health must not require auth)", resp.StatusCode)
+	}
+}
+
+// TestServer_InfoBypassesAuth pins the post-TASK-144 contract: /api/info
+// is never gated. The frontend has to read auth_required BEFORE it has
+// a token, so gating /api/info would lock new users out.
+func TestServer_InfoBypassesAuth(t *testing.T) {
+	upstream := fakeGroq(t)
+	defer upstream.Close()
+	s := newTestServer(t, upstream.URL, "secret")
+	base, _ := startListening(t, s)
+
+	resp, err := http.Get(base + "/api/info")
+	if err != nil {
+		t.Fatalf("GET /api/info: %v", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("status = %d, want 200 (info must not require auth)", resp.StatusCode)
+	}
+	var info infoResponse
+	if err := json.NewDecoder(resp.Body).Decode(&info); err != nil {
+		t.Fatalf("decode info: %v", err)
+	}
+	if !info.AuthRequired {
+		t.Errorf("auth_required = false; want true when Token is set")
+	}
+}
+
+// TestServer_RateLimit429 confirms the rate-limit middleware kicks in
+// after rateLimitMaxPerIP requests within the window. We hammer the
+// limiter directly so the test stays fast — driving it through the
+// HTTP layer would require waiting on real timestamps and a real
+// upstream. The middleware's only HTTP-level work is the 429 + JSON
+// + Retry-After header, which TestServer_RateLimitMiddleware_HTTP
+// below exercises end-to-end with a single overage request.
+func TestServer_RateLimit429(t *testing.T) {
+	l := newIPRateLimiter()
+	now := time.Unix(1_700_000_000, 0) // fixed clock; not real time.Now()
+	const ip = "203.0.113.7"
+	for i := 0; i < rateLimitMaxPerIP; i++ {
+		if !l.allow(ip, now, rateLimitWindow, rateLimitMaxPerIP) {
+			t.Fatalf("request %d was rejected; want allowed (within burst)", i+1)
+		}
+	}
+	if l.allow(ip, now, rateLimitWindow, rateLimitMaxPerIP) {
+		t.Fatalf("request %d was allowed; want rejected (over burst)", rateLimitMaxPerIP+1)
+	}
+	// Same ip but after the window has elapsed — limiter should reset.
+	later := now.Add(rateLimitWindow + time.Second)
+	if !l.allow(ip, later, rateLimitWindow, rateLimitMaxPerIP) {
+		t.Fatalf("request after window expired was rejected; want allowed (window slides)")
+	}
+}
+
+// TestServer_RateLimit_PerIP verifies the limiter scopes counts to a
+// source IP: a different IP's requests don't drain the first IP's
+// budget.
+func TestServer_RateLimit_PerIP(t *testing.T) {
+	l := newIPRateLimiter()
+	now := time.Unix(1_700_000_000, 0)
+	for i := 0; i < rateLimitMaxPerIP; i++ {
+		l.allow("203.0.113.7", now, rateLimitWindow, rateLimitMaxPerIP)
+	}
+	// First IP exhausted.
+	if l.allow("203.0.113.7", now, rateLimitWindow, rateLimitMaxPerIP) {
+		t.Fatalf("over-budget request for first IP was allowed")
+	}
+	// Second IP starts fresh.
+	if !l.allow("198.51.100.42", now, rateLimitWindow, rateLimitMaxPerIP) {
+		t.Fatalf("first request for distinct second IP was rejected; per-IP scoping broken")
+	}
+}
+
+// TestSanitizeUpstreamError covers the policy that decides whether to
+// surface an upstream error verbatim or substitute the generic message.
+// Mapped-by-internal/transcribe friendly phrases stay; raw transport
+// gunk gets swapped for the generic body.
+func TestSanitizeUpstreamError(t *testing.T) {
+	cases := []struct {
+		in   string
+		want string
+	}{
+		// Friendly mapped messages — pass through.
+		{"Invalid API key for api.groq.com. Edit your config to fix it.", "Invalid API key for api.groq.com. Edit your config to fix it."},
+		{"Rate limited (HTTP 429). Wait a moment and retry.", "Rate limited (HTTP 429). Wait a moment and retry."},
+		{"Audio too large (HTTP 413). Try a shorter recording.", "Audio too large (HTTP 413). Try a shorter recording."},
+		{"Provider error at api.groq.com (HTTP 500). Try again in a moment.", "Provider error at api.groq.com (HTTP 500). Try again in a moment."},
+		// Raw transport / decode errors — swap for the generic.
+		{`Post "https://api.groq.com/openai/v1/audio/transcriptions": dial tcp 10.0.0.1:443: connect: connection refused`, "upstream request failed; check the server log for details"},
+		{"json: cannot unmarshal string into Go struct field …", "upstream request failed; check the server log for details"},
+	}
+	for _, tc := range cases {
+		if got := sanitizeUpstreamError(errors.New(tc.in)); got != tc.want {
+			t.Errorf("sanitizeUpstreamError(%q) = %q; want %q", tc.in, got, tc.want)
+		}
+	}
+	// nil → "" (defensive; the handler never calls with nil but the
+	// helper should be safe anyway).
+	if got := sanitizeUpstreamError(nil); got != "" {
+		t.Errorf("sanitizeUpstreamError(nil) = %q; want empty", got)
+	}
+}
+
+// TestConstantTimeEqualString sanity-checks the wrapper. We can't
+// measure timing in a unit test, but we can pin the documented
+// short-circuit: unequal lengths return false without consulting bytes.
+func TestConstantTimeEqualString(t *testing.T) {
+	if !constantTimeEqualString("Bearer abc", "Bearer abc") {
+		t.Error("equal strings reported as unequal")
+	}
+	if constantTimeEqualString("Bearer abc", "Bearer xyz") {
+		t.Error("unequal strings reported as equal")
+	}
+	if constantTimeEqualString("a", "ab") {
+		t.Error("different-length strings reported as equal")
+	}
+	if constantTimeEqualString("", "x") {
+		t.Error("empty vs non-empty reported as equal")
 	}
 }

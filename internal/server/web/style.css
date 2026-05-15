@@ -658,6 +658,14 @@ kbd {
   padding: 20px 24px 24px;
   border-top: 1px solid var(--line);
   background: var(--surface-2);
+  /* Cap the drawer height on short viewports so it can't grow taller
+     than the visible space and bury the dock buttons. Anything past
+     the cap scrolls inside the drawer instead of pushing page content
+     up. 70vh leaves headroom for the dock + a sliver of the page
+     underneath as visual context. */
+  max-height: 70vh;
+  overflow-y: auto;
+  overscroll-behavior: contain;
 }
 .settings-grid {
   display: grid;
