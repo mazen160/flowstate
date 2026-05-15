@@ -17,10 +17,13 @@ import (
 // the toml encoder) so the comments survive — TOML encoders don't preserve
 // comments on roundtrip, and the comments are user-facing documentation.
 const configTemplate = `# Flowstate config file.
-# Get a free Groq API key from https://groq.com.
-
-api_key = ""
-
+#
+# The Groq API key is read from the GROQ_API_KEY environment variable
+# (or GROQ_API_TOKEN as a fallback). It is NOT stored in this file.
+# Get a free key from https://console.groq.com, then:
+#
+#   export GROQ_API_KEY=gsk_...
+#
 # Trigger mode. Picks how a recording is stopped.
 #   "enter"          → start on launch, stop when the user presses Enter.
 #   "push-to-talk"   → record only while ptt_key is held. Requires global
@@ -36,8 +39,9 @@ transcription_model    = "whisper-large-v3"
 cleanup_model          = "openai/gpt-oss-20b"
 cleanup_fallback_model = "meta-llama/llama-4-scout-17b-16e-instruct"
 
-# Optional ISO-639-1 language code to bias transcription. Empty = auto-detect.
-language = ""
+# ISO-639-1 language code that biases transcription. Defaults to "en" (English).
+# Set to "" to let Whisper auto-detect, or "fr", "es", "de", etc. for other languages.
+language = "en"
 
 # Audio input device. Empty = system default. Use ` + "`flowstate devices`" + ` to list.
 input_device = ""
@@ -72,8 +76,9 @@ literal = %s
 // prompts inlined under [prompts].
 //
 // Behavior:
-//   - Creates parent directories as needed (0700, since the dir holds the
-//     plaintext API key).
+//   - Creates parent directories as needed (0700; the directory historically
+//     held the API key, and the conservative perms remain so we don't widen
+//     access for users who keep other secrets next to the config).
 //   - Refuses to overwrite an existing file unless force is true.
 //   - Applies 0600 perms on Unix (no-op on Windows).
 func Init(path string, force bool) error {

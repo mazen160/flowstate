@@ -85,7 +85,16 @@ Settings → Privacy & Security → Accessibility**.
 2. Get a Groq API key from [https://console.groq.com](https://console.groq.com)
    (the free tier is enough for personal dictation).
 
-3. Open the config file and set `api_key = "..."` to your key.
+3. Export the key as an environment variable. flowstate reads it from
+   `GROQ_API_KEY` and never stores it on disk:
+
+   ```sh
+   export GROQ_API_KEY=gsk_...
+   ```
+
+   `GROQ_API_TOKEN` is accepted as a fallback for compatibility with other
+   Groq tooling, but `GROQ_API_KEY` is preferred. Add the `export` line to
+   your shell rc (e.g. `~/.zshrc`, `~/.bashrc`) so it survives new shells.
 
 4. Run it:
 
@@ -103,16 +112,20 @@ Configuration lives in TOML at the path printed by `flowstate config path`.
 Resolution order: `--config <path>` > `$FLOWSTATE_CONFIG` > the platform
 default above.
 
+The Groq API key is **not** a config field. It is read from the
+`GROQ_API_KEY` environment variable (or `GROQ_API_TOKEN` as a fallback) at
+runtime. Any subcommand that calls Groq will fail with a friendly message
+naming both env vars if neither is set.
+
 | Field                    | Default                                    | Meaning                                                                              |
 | ------------------------ | ------------------------------------------ | ------------------------------------------------------------------------------------ |
-| `api_key`                | `""`                                       | Groq API key. Required before any subcommand that calls Groq.                        |
 | `trigger`                | `"enter"`                                  | How recording stops: `enter` (press Enter) or `push-to-talk` (hold a key).           |
 | `ptt_key`                | `"space"`                                  | Key held in push-to-talk mode. Ignored when `trigger = "enter"`.                     |
 | `base_url`               | `"https://api.groq.com/openai/v1"`         | Provider root. Override only for a self-hosted OpenAI-compatible proxy.              |
 | `transcription_model`    | `"whisper-large-v3"`                       | Whisper model id passed to `/audio/transcriptions`.                                  |
 | `cleanup_model`          | `"openai/gpt-oss-20b"`                     | LLM model id passed to `/chat/completions` for cleanup.                              |
 | `cleanup_fallback_model` | `"meta-llama/llama-4-scout-17b-16e-instruct"` | Retried on HTTP 429 or empty primary response. Set equal to `cleanup_model` (or empty) to disable. |
-| `language`               | `""`                                       | Optional ISO-639-1 hint (e.g. `"en"`). Empty = auto-detect.                          |
+| `language`               | `"en"`                                     | ISO-639-1 language hint. Set `""` to auto-detect, or `"fr"`/`"es"`/`"de"`/etc.       |
 | `input_device`           | `""`                                       | Microphone UID or name. Empty = system default. List with `flowstate devices`.       |
 | `mute_while_recording`   | `true`                                     | Mutes system audio output during the recording so playback doesn't bleed in.         |
 | `output_mode`            | `"stdout,clipboard"`                       | Comma list of `stdout`, `clipboard`, `paste`, or the literal `"all"`.                |
@@ -211,9 +224,15 @@ config file.
 
 ## Troubleshooting
 
-**`Invalid API key for api.groq.com. Edit your config to fix it.`** — your
-`api_key` is unset, expired, or revoked. Generate a new one at
-[console.groq.com](https://console.groq.com) and update the config file.
+**`Invalid API key for api.groq.com.`** — your Groq key is unset, expired,
+or revoked. Generate a new one at
+[console.groq.com](https://console.groq.com) and re-export it:
+`export GROQ_API_KEY=gsk_...`.
+
+**`Groq API key not found. Set GROQ_API_KEY (preferred) or GROQ_API_TOKEN
+in your environment.`** — flowstate looked for both env vars and found
+neither set. Export `GROQ_API_KEY` in the shell you launch flowstate from
+(add the line to `~/.zshrc` or `~/.bashrc` so it persists).
 
 **`no input devices found` on `flowstate devices`** — the OS has no
 microphones registered. On macOS, check **System Settings → Privacy &
@@ -246,8 +265,9 @@ has rate limits. flowstate automatically retries the cleanup pass with
 - No "Edit Mode" subcommand against highlighted text. The `command` prompt
   is shipped so a future revision can pipe selected text in via stdin, but
   the wiring is out of scope for v1.
-- No OS-keychain integration for `api_key`. The key lives in plaintext TOML
-  with `0600` permissions on Unix.
+- No OS-keychain integration. The Groq API key is read from the
+  `GROQ_API_KEY` environment variable; persisting it across shells is the
+  user's responsibility (e.g. via shell rc files or a tool like `direnv`).
 
 ## License
 

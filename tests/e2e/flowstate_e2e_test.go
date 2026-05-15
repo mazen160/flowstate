@@ -179,7 +179,7 @@ func TestFlowstateE2E_WireLevelGroq(t *testing.T) {
 	// dir and matches what the README documents.
 	cfgPath := filepath.Join(tmpDir, "config.toml")
 	cfg := `# fixture config for the e2e wire-level smoke test
-api_key = "fake"
+# (API key now comes from GROQ_API_KEY env var; not written to config)
 trigger = "enter"
 output_mode = "stdout"
 mute_while_recording = false

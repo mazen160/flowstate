@@ -5,6 +5,7 @@ package config
 
 import (
 	"fmt"
+	"os"
 	"sort"
 	"strings"
 )
@@ -13,8 +14,12 @@ import (
 //
 // Field names match the snake_case keys in the spec. Pointer-free zero values
 // let us treat an unset field as "use the documented default" in [Defaults].
+//
+// Note: the Groq API key is intentionally NOT a field here. It is read at
+// runtime from the GROQ_API_KEY environment variable (or GROQ_API_TOKEN as
+// a fallback) by [ResolveAPIKey]. Keeping secrets out of the config file
+// makes them less likely to be checked in or shared accidentally.
 type Config struct {
-	APIKey               string            `toml:"api_key"`
 	Trigger              string            `toml:"trigger"`
 	PTTKey               string            `toml:"ptt_key"`
 	BaseURL              string            `toml:"base_url"`
@@ -38,14 +43,13 @@ type Config struct {
 // freshly-written files (Load preserves whatever the user has on disk).
 func Defaults() Config {
 	return Config{
-		APIKey:               "",
 		Trigger:              "enter",
 		PTTKey:               "space",
 		BaseURL:              "https://api.groq.com/openai/v1",
 		TranscriptionModel:   "whisper-large-v3",
 		CleanupModel:         "openai/gpt-oss-20b",
 		CleanupFallbackModel: "meta-llama/llama-4-scout-17b-16e-instruct",
-		Language:             "",
+		Language:             "en",
 		InputDevice:          "",
 		MuteWhileRecording:   true,
 		OutputMode:           "stdout,clipboard",
@@ -69,9 +73,9 @@ var validOutputModes = map[string]struct{}{
 }
 
 // Validate checks that the parsed Config is internally consistent. It does
-// NOT require [Config.APIKey] to be non-empty — that's checked separately by
-// [Config.RequireAPIKey] so `flowstate config init` and `config path` can
-// run before the user has set a key.
+// NOT require an API key — that's checked separately by [ResolveAPIKey] so
+// `flowstate config init` and `config path` can run before the user has
+// exported one.
 func (c *Config) Validate() error {
 	if _, ok := validTriggers[c.Trigger]; !ok {
 		return fmt.Errorf("invalid trigger %q: must be one of %s",
@@ -109,13 +113,38 @@ func (c *Config) OutputDestinations() (stdout, clipboard, paste bool) {
 	return
 }
 
-// RequireAPIKey returns a friendly error if [Config.APIKey] is empty,
-// pointing the user at the file they need to edit.
-func (c *Config) RequireAPIKey(path string) error {
-	if strings.TrimSpace(c.APIKey) == "" {
-		return fmt.Errorf("api_key is empty; edit %s and add your Groq key (get one free at https://groq.com)", path)
+// APIKeyMissingError is returned by [ResolveAPIKey] when neither
+// GROQ_API_KEY nor GROQ_API_TOKEN is set in the environment. Exported so
+// callers that want to special-case the missing-key path (rather than rely
+// on the error message) can use errors.As.
+type APIKeyMissingError struct{}
+
+// Error returns a friendly message naming both env vars and pointing the
+// user at console.groq.com to get a free key.
+func (*APIKeyMissingError) Error() string {
+	return "Groq API key not found. Set GROQ_API_KEY (preferred) or GROQ_API_TOKEN in your environment. Get a free key at https://console.groq.com."
+}
+
+// ResolveAPIKey returns the Groq API key from the environment.
+//
+// Resolution order:
+//  1. GROQ_API_KEY (preferred)
+//  2. GROQ_API_TOKEN (accepted as a fallback for compatibility)
+//
+// If neither is set (or both are empty / whitespace-only), it returns an
+// [*APIKeyMissingError] with a user-facing message.
+//
+// The key is intentionally not read from the on-disk config file: keeping
+// secrets out of TOML reduces the risk of them ending up in git, backups,
+// or shared screenshots.
+func ResolveAPIKey() (string, error) {
+	if v := strings.TrimSpace(os.Getenv("GROQ_API_KEY")); v != "" {
+		return v, nil
 	}
-	return nil
+	if v := strings.TrimSpace(os.Getenv("GROQ_API_TOKEN")); v != "" {
+		return v, nil
+	}
+	return "", &APIKeyMissingError{}
 }
 
 // parseOutputMode validates the raw string form of output_mode and returns

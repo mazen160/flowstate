@@ -175,7 +175,6 @@ func TestInit_AppliesPerms(t *testing.T) {
 func TestLoad_ValidConfig(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "config.toml")
 	body := `
-api_key = "sk-test"
 trigger = "push-to-talk"
 ptt_key = "f12"
 base_url = "https://example.com/v1"
@@ -196,9 +195,6 @@ default = "hello"
 	cfg, err := Load(path)
 	if err != nil {
 		t.Fatalf("Load: %v", err)
-	}
-	if cfg.APIKey != "sk-test" {
-		t.Errorf("APIKey = %q", cfg.APIKey)
 	}
 	if cfg.Trigger != "push-to-talk" {
 		t.Errorf("Trigger = %q", cfg.Trigger)
@@ -355,34 +351,90 @@ func TestOutputDestinations_Subset(t *testing.T) {
 	}
 }
 
-// TestRequireAPIKey_EmptyErrors covers the empty case and the friendly
-// error message.
-func TestRequireAPIKey_EmptyErrors(t *testing.T) {
-	cfg := validBaseConfig()
-	cfg.APIKey = ""
-	err := cfg.RequireAPIKey("/etc/flowstate/config.toml")
-	if err == nil {
-		t.Fatal("RequireAPIKey: want error, got nil")
-	}
-	if !strings.Contains(err.Error(), "/etc/flowstate/config.toml") {
-		t.Errorf("error should mention the path; got: %v", err)
-	}
-	if !strings.Contains(err.Error(), "api_key") {
-		t.Errorf("error should mention api_key; got: %v", err)
-	}
+// TestResolveAPIKey_GROQ_API_KEY pins the preferred env var: GROQ_API_KEY
+// alone is enough and its value is returned verbatim.
+func TestResolveAPIKey_GROQ_API_KEY(t *testing.T) {
+	t.Setenv("GROQ_API_KEY", "gsk_primary")
+	t.Setenv("GROQ_API_TOKEN", "")
 
-	cfg.APIKey = "   " // whitespace also counts as empty
-	if err := cfg.RequireAPIKey("/tmp/x"); err == nil {
-		t.Error("whitespace-only api_key should error")
+	got, err := ResolveAPIKey()
+	if err != nil {
+		t.Fatalf("ResolveAPIKey: %v", err)
+	}
+	if got != "gsk_primary" {
+		t.Errorf("ResolveAPIKey() = %q; want %q", got, "gsk_primary")
 	}
 }
 
-// TestRequireAPIKey_NonEmptyOk pins the happy path.
-func TestRequireAPIKey_NonEmptyOk(t *testing.T) {
-	cfg := validBaseConfig()
-	cfg.APIKey = "sk-something"
-	if err := cfg.RequireAPIKey("/tmp/x"); err != nil {
-		t.Errorf("non-empty api_key: %v", err)
+// TestResolveAPIKey_GROQ_API_TOKEN_Fallback verifies the compat fallback
+// fires when the preferred var is unset.
+func TestResolveAPIKey_GROQ_API_TOKEN_Fallback(t *testing.T) {
+	t.Setenv("GROQ_API_KEY", "")
+	t.Setenv("GROQ_API_TOKEN", "gsk_fallback")
+
+	got, err := ResolveAPIKey()
+	if err != nil {
+		t.Fatalf("ResolveAPIKey: %v", err)
+	}
+	if got != "gsk_fallback" {
+		t.Errorf("ResolveAPIKey() = %q; want %q", got, "gsk_fallback")
+	}
+}
+
+// TestResolveAPIKey_BothSet_PrefersAPIKey pins the priority order when
+// both env vars are populated: GROQ_API_KEY always wins.
+func TestResolveAPIKey_BothSet_PrefersAPIKey(t *testing.T) {
+	t.Setenv("GROQ_API_KEY", "gsk_primary")
+	t.Setenv("GROQ_API_TOKEN", "gsk_fallback")
+
+	got, err := ResolveAPIKey()
+	if err != nil {
+		t.Fatalf("ResolveAPIKey: %v", err)
+	}
+	if got != "gsk_primary" {
+		t.Errorf("ResolveAPIKey() = %q; want %q (GROQ_API_KEY should win)",
+			got, "gsk_primary")
+	}
+}
+
+// TestResolveAPIKey_NeitherSet_ReturnsError verifies the friendly error
+// path. The message must name GROQ_API_KEY (so the user knows what to
+// export) and point at console.groq.com (so they know where to get one).
+func TestResolveAPIKey_NeitherSet_ReturnsError(t *testing.T) {
+	t.Setenv("GROQ_API_KEY", "")
+	t.Setenv("GROQ_API_TOKEN", "")
+
+	got, err := ResolveAPIKey()
+	if err == nil {
+		t.Fatalf("ResolveAPIKey: want error, got value %q", got)
+	}
+	if got != "" {
+		t.Errorf("ResolveAPIKey on error: got value %q; want empty", got)
+	}
+	msg := err.Error()
+	if !strings.Contains(msg, "GROQ_API_KEY") {
+		t.Errorf("error should mention GROQ_API_KEY; got: %v", err)
+	}
+	if !strings.Contains(msg, "console.groq.com") {
+		t.Errorf("error should point at console.groq.com; got: %v", err)
+	}
+
+	// And it must be the typed sentinel error so callers can errors.As it.
+	var missing *APIKeyMissingError
+	if !errors.As(err, &missing) {
+		t.Errorf("error should be *APIKeyMissingError; got %T", err)
+	}
+}
+
+// TestResolveAPIKey_WhitespaceOnly_ReturnsError makes sure that an env var
+// set to whitespace doesn't accidentally pass as a valid key (which would
+// lead to a useless 401 from Groq later in the pipeline).
+func TestResolveAPIKey_WhitespaceOnly_ReturnsError(t *testing.T) {
+	t.Setenv("GROQ_API_KEY", "   ")
+	t.Setenv("GROQ_API_TOKEN", "\t\n")
+
+	if _, err := ResolveAPIKey(); err == nil {
+		t.Fatal("ResolveAPIKey with whitespace-only env vars: want error, got nil")
 	}
 }
 

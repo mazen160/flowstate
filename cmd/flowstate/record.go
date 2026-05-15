@@ -18,7 +18,8 @@ import (
 )
 
 // runRecord is the default pipeline. It parses record-mode flags, loads the
-// config (with friendly errors when missing or unkeyed), and then walks the
+// config, resolves the Groq API key from the environment (with a friendly
+// error if it's not set), and then walks the
 // load -> mute -> capture -> trigger -> transcribe -> cleanup -> output
 // sequence documented in the Architecture & Pipeline doc.
 //
@@ -57,9 +58,12 @@ func runRecord(ctx context.Context, args []string, stdin io.Reader, stdout, stde
 	//    downstream (e.g. trigger.NewPushToTalkTrigger rejects bad keys).
 	applyFlags(cfg, rf)
 
-	// 3. Require an API key. After overrides so a (currently-unused but
-	//    spec-allowed) future --api-key flag would Just Work.
-	if err := cfg.RequireAPIKey(path); err != nil {
+	// 3. Resolve the Groq API key from the environment. Done BEFORE mute
+	//    and audio capture so a user who hasn't exported a key gets a
+	//    fast, friendly error instead of seeing "Recording…" and then
+	//    being told their key is missing after they've spoken.
+	apiKey, err := config.ResolveAPIKey()
+	if err != nil {
 		fmt.Fprintf(stderr, "%v\n", err)
 		return 1
 	}
@@ -103,7 +107,7 @@ func runRecord(ctx context.Context, args []string, stdin io.Reader, stdout, stde
 	// internally; we wrap ctx so a future Ctrl+C in the caller bubbles
 	// here too.
 	tx := transcribe.NewClient(transcribe.Options{
-		APIKey:   cfg.APIKey,
+		APIKey:   apiKey,
 		BaseURL:  cfg.BaseURL,
 		Model:    cfg.TranscriptionModel,
 		Language: cfg.Language,
@@ -131,7 +135,7 @@ func runRecord(ctx context.Context, args []string, stdin io.Reader, stdout, stde
 		return 1
 	}
 	cl := cleanup.NewClient(cleanup.Options{
-		APIKey:        cfg.APIKey,
+		APIKey:        apiKey,
 		BaseURL:       cfg.BaseURL,
 		Model:         cfg.CleanupModel,
 		FallbackModel: cfg.CleanupFallbackModel,
