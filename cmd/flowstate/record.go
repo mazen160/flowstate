@@ -215,6 +215,16 @@ func runRecord(ctx context.Context, args []string, stdin io.Reader, stdout, stde
 	// config; output.WriteWithStdout lets us route stdout to the injected
 	// writer for tests (main wires it to os.Stdout).
 	stdoutOn, clipboardOn, pasteOn := cfg.OutputDestinations()
+	// Setting --paste-delay (or paste_delay_seconds) without enabling
+	// paste in output_mode is a common foot-gun: the user expects the
+	// delayed paste behavior but the keystroke step never fires because
+	// pasteOn is false. Honor their intent — turn paste on for this run
+	// and tell them what we did so they can pin it in config if they
+	// want it persistent.
+	if cfg.PasteDelaySeconds > 0 && !pasteOn {
+		reporter.Warning("paste_delay_seconds is %d but paste is not in output_mode; auto-enabling paste for this run (set output_mode to include \"paste\" to silence this).", cfg.PasteDelaySeconds)
+		pasteOn = true
+	}
 	dests := output.Destinations{
 		Stdout:                 stdoutOn,
 		Clipboard:              clipboardOn,
