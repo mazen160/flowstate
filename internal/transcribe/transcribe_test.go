@@ -262,6 +262,56 @@ func TestTranscribe_NonJSONBody(t *testing.T) {
 	}
 }
 
+// TestTranscribeReader_WebM_ContentType confirms that TranscribeReader
+// honors the upload filename's extension when picking the multipart "file"
+// part Content-Type. A "recording.webm" upload must advertise audio/webm so
+// Groq's container sniff picks the right demuxer. This is the path the
+// `flowstate web` HTTP server exercises for browser MediaRecorder output.
+func TestTranscribeReader_WebM_ContentType(t *testing.T) {
+	var fileCT, fileName string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, params, _ := mime.ParseMediaType(r.Header.Get("Content-Type"))
+		mr := multipart.NewReader(r.Body, params["boundary"])
+		for {
+			part, err := mr.NextPart()
+			if err == io.EOF {
+				break
+			}
+			if err != nil {
+				t.Errorf("NextPart: %v", err)
+				return
+			}
+			if part.FormName() == "file" {
+				fileCT = part.Header.Get("Content-Type")
+				fileName = part.FileName()
+			}
+			_, _ = io.Copy(io.Discard, part)
+			_ = part.Close()
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = io.WriteString(w, `{"text":"hello","segments":[{"no_speech_prob":0.01}]}`)
+	}))
+	defer srv.Close()
+
+	c := newTestClient(srv, "")
+	// 100 bytes of arbitrary audio payload; Groq is mocked so contents don't
+	// matter beyond ensuring the multipart body is well-formed.
+	payload := strings.NewReader(strings.Repeat("a", 100))
+	got, err := c.TranscribeReader(context.Background(), payload, "recording.webm")
+	if err != nil {
+		t.Fatalf("TranscribeReader: %v", err)
+	}
+	if got != "hello" {
+		t.Errorf("TranscribeReader() = %q; want %q", got, "hello")
+	}
+	if fileCT != "audio/webm" {
+		t.Errorf("file part Content-Type = %q; want %q", fileCT, "audio/webm")
+	}
+	if fileName != "recording.webm" {
+		t.Errorf("file part filename = %q; want %q", fileName, "recording.webm")
+	}
+}
+
 // TestTranscribe_FileContentType confirms the multipart "file" part carries
 // Content-Type: audio/wav. The provider contract pins this header.
 func TestTranscribe_FileContentType(t *testing.T) {

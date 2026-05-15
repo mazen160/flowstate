@@ -138,6 +138,155 @@ func TestRecorder_CloseIdempotent(t *testing.T) {
 	}
 }
 
+// TestPeakHistory_LengthAlways7 pins the contract that PeakHistory always
+// returns exactly 7 floats, even on a freshly-constructed recorder that has
+// never seen audio data — the UI redraw goroutine relies on this so it can
+// blindly index into the slice without bounds checks.
+func TestPeakHistory_LengthAlways7(t *testing.T) {
+	r, err := NewRecorder("")
+	if err != nil {
+		t.Fatalf("NewRecorder: %v", err)
+	}
+	defer func() {
+		_ = r.Close()
+	}()
+
+	peaks := r.PeakHistory()
+	if len(peaks) != 7 {
+		t.Fatalf("PeakHistory length = %d; want 7", len(peaks))
+	}
+	for i, v := range peaks {
+		if v != 0 {
+			t.Errorf("PeakHistory[%d] = %v on fresh recorder; want 0", i, v)
+		}
+	}
+}
+
+// TestComputePeak_Endpoints pins the normalization. The peak helper is the
+// pure-function half of the onSamples callback; exercising it directly lets
+// us assert the math without needing a live audio device.
+func TestComputePeak_Endpoints(t *testing.T) {
+	// Empty input → zero peak. Otherwise we'd divide by zero or return NaN
+	// and the meter would render garbage on the first frame.
+	if got := computePeak(nil); got != 0 {
+		t.Errorf("computePeak(nil) = %v; want 0", got)
+	}
+	if got := computePeak([]byte{}); got != 0 {
+		t.Errorf("computePeak(empty) = %v; want 0", got)
+	}
+
+	// All zeros → zero peak.
+	zeros := make([]byte, 16) // 8 int16 samples
+	if got := computePeak(zeros); got != 0 {
+		t.Errorf("computePeak(zeros) = %v; want 0", got)
+	}
+
+	// Single max-positive int16 (32767) → ≈ 0.99997.
+	maxPos := []byte{0xff, 0x7f}
+	if got := computePeak(maxPos); got < 0.99 || got > 1.0 {
+		t.Errorf("computePeak(maxPos) = %v; want ~1.0", got)
+	}
+
+	// Single min-negative int16 (-32768) → 1.0 exactly.
+	minNeg := []byte{0x00, 0x80}
+	if got := computePeak(minNeg); got != 1.0 {
+		t.Errorf("computePeak(minNeg) = %v; want 1.0", got)
+	}
+
+	// Mixed buffer: a quiet 1024 sample (about 0.031) and a louder 16384
+	// sample (0.5). The helper must return the louder one.
+	mixed := []byte{
+		0x00, 0x04, // +1024
+		0x00, 0x40, // +16384
+		0x00, 0x00, // 0
+	}
+	got := computePeak(mixed)
+	if got < 0.49 || got > 0.51 {
+		t.Errorf("computePeak(mixed) = %v; want ~0.5", got)
+	}
+}
+
+// TestPeakHistory_RingShift drives the same onSamples shift logic that the
+// audio callback uses. Rather than try to inject the callback into a live
+// recorder, we exercise the public PeakHistory contract by simulating
+// repeated peak-write cycles via a small helper that mirrors the callback
+// math, then assert the ring moves left as new peaks arrive.
+//
+// The behavior under test:
+//   - The newest peak is always at index 6.
+//   - Older peaks shift toward index 0.
+//   - After 7 writes the oldest write has fallen off the front.
+func TestPeakHistory_RingShift(t *testing.T) {
+	r, err := NewRecorder("")
+	if err != nil {
+		t.Fatalf("NewRecorder: %v", err)
+	}
+	defer func() {
+		_ = r.Close()
+	}()
+
+	// Mirror the in-callback math so the assertion is independent of any
+	// audio thread. The mutex acquire pattern matches the production code
+	// so a future refactor that changes the ring's storage trips this test.
+	pushPeak := func(p float64) {
+		r.mu.Lock()
+		for i := 0; i < len(r.peaks)-1; i++ {
+			r.peaks[i] = r.peaks[i+1]
+		}
+		r.peaks[len(r.peaks)-1] = p
+		r.mu.Unlock()
+	}
+
+	want := []float64{0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7}
+	for _, p := range want {
+		pushPeak(p)
+	}
+	got := r.PeakHistory()
+	for i, v := range want {
+		if got[i] != v {
+			t.Errorf("PeakHistory[%d] = %v; want %v (full want=%v, got=%v)",
+				i, got[i], v, want, got)
+		}
+	}
+
+	// One more push — the oldest (0.1) should drop off and 0.8 should
+	// land at the end.
+	pushPeak(0.8)
+	got = r.PeakHistory()
+	wantAfter := []float64{0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8}
+	for i, v := range wantAfter {
+		if got[i] != v {
+			t.Errorf("after shift PeakHistory[%d] = %v; want %v", i, got[i], v)
+		}
+	}
+}
+
+// TestPeakHistory_ReturnsCopy verifies that mutating the returned slice
+// does not poison the recorder's internal ring. The UI goroutine reads
+// this slice on every frame; an aliased return would let a buggy renderer
+// corrupt the audio state.
+func TestPeakHistory_ReturnsCopy(t *testing.T) {
+	r, err := NewRecorder("")
+	if err != nil {
+		t.Fatalf("NewRecorder: %v", err)
+	}
+	defer func() {
+		_ = r.Close()
+	}()
+
+	r.mu.Lock()
+	r.peaks[6] = 0.42
+	r.mu.Unlock()
+
+	first := r.PeakHistory()
+	first[6] = 999
+
+	second := r.PeakHistory()
+	if second[6] != 0.42 {
+		t.Errorf("PeakHistory shared backing array: second[6]=%v; want 0.42", second[6])
+	}
+}
+
 // TestListInputDevices_DoesNotPanic exercises the device enumeration entry
 // point. We can't assert on specific devices (CI machines vary wildly), but
 // the call must either return a slice (possibly empty) or a real error —

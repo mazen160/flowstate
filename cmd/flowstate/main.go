@@ -22,9 +22,13 @@ import (
 )
 
 // version is the build identifier printed by `flowstate version`. The
-// 0.0.x-dev string here is the M9 placeholder; release builds will override
-// it via -ldflags="-X main.version=..." once the release pipeline lands.
-var version = "0.0.1-dev"
+// in-tree default tracks the most recently released version; tagged
+// builds (driven by the Makefile or goreleaser) override it via
+// -ldflags="-X main.version=..." with the actual tag (e.g. v1.0.1).
+// Untagged `make build` from a clean tree reads the latest tag via
+// `git describe --tags`, so this constant only surfaces in builds made
+// without the Makefile.
+var version = "1.0.0"
 
 // helpText is what `flowstate --help` (and `flowstate -h`) prints. Short by
 // design: details live in the man-page-style README, not in --help.
@@ -32,6 +36,7 @@ const helpText = `flowstate — record, transcribe, and clean up speech with Gro
 
 Usage:
   flowstate [flags]                  Record (default).
+  flowstate web [flags]              Start the local web UI + JSON API.
   flowstate version                  Print version.
   flowstate config init [--force]    Write a default config file.
   flowstate config path              Print the resolved config path.
@@ -47,6 +52,19 @@ Record flags:
   --trigger <mode>         "enter" or "push-to-talk".
   --ptt-key <name>         Override ptt_key (push-to-talk only).
   --model <name>           Override cleanup_model.
+  --no-color               Disable ANSI colors on stderr (same as NO_COLOR=1
+                           or colors = "never" in config).
+  --max-time <seconds>     Auto-stop recording after N seconds and process
+                           normally (exit 0). 0 = disabled (default).
+  --paste-delay <seconds>  Wait N seconds between clipboard seed and the
+                           paste keystroke. Gives you time to focus the
+                           destination window. 0 = immediate (default).
+
+Web flags (use with: flowstate web):
+  --web-interface-listen <host>  Interface to bind (default 127.0.0.1).
+  --web-port <port>              TCP port to listen on (default 8585).
+  --web-token <token>            Optional Bearer auth token. Empty = no auth.
+                                 FLOWSTATE_WEB_TOKEN env var is the fallback.
 `
 
 func main() {
@@ -79,6 +97,8 @@ func run(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 		return runConfig(args[1:], stdout, stderr)
 	case "devices":
 		return runDevices(stdout, stderr)
+	case "web":
+		return runWeb(context.Background(), args[1:], stderr)
 	}
 
 	// Anything else (flags like --config=foo or unrecognized positional)

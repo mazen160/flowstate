@@ -19,12 +19,35 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"strings"
 )
 
-// transcriptionContentType is the value we send for the file part's
-// Content-Type header. The spec pins this to audio/wav because Flowstate
-// only ever uploads PCM16 mono 16 kHz WAVs.
-const transcriptionContentType = "audio/wav"
+// audioContentType maps a filename to the Content-Type the file part should
+// advertise on the wire. Groq's Whisper endpoint accepts a handful of
+// container formats; we surface the ones flowstate emits or accepts:
+//
+//   - .wav        → audio/wav  (PCM16 from the CLI record path)
+//   - .webm       → audio/webm (default MediaRecorder output in Chromium)
+//   - .ogg / .opus → audio/ogg (Firefox MediaRecorder + opus codec)
+//   - .mp4 / .m4a → audio/mp4  (Safari MediaRecorder)
+//
+// Anything else falls back to audio/wav. The legacy on-disk record path
+// always uploads .wav files so this default preserves prior behavior.
+func audioContentType(filename string) string {
+	ext := strings.ToLower(filepath.Ext(filename))
+	switch ext {
+	case ".wav":
+		return "audio/wav"
+	case ".webm":
+		return "audio/webm"
+	case ".ogg", ".opus":
+		return "audio/ogg"
+	case ".mp4", ".m4a":
+		return "audio/mp4"
+	default:
+		return "audio/wav"
+	}
+}
 
 // buildMultipartBody assembles the request body for a transcription request.
 // It returns the body bytes, the boundary string (for the Content-Type
@@ -34,17 +57,29 @@ const transcriptionContentType = "audio/wav"
 // The language part is included only when language is non-empty. Each part
 // uses CRLF line endings as required by RFC 2046.
 func buildMultipartBody(wavPath, model, language string) (body []byte, boundary string, err error) {
+	audioBytes, err := os.ReadFile(wavPath)
+	if err != nil {
+		return nil, "", fmt.Errorf("read wav file: %w", err)
+	}
+	return buildMultipartBodyFromBytes(audioBytes, filepath.Base(wavPath), model, language)
+}
+
+// buildMultipartBodyFromBytes is the in-memory equivalent of
+// buildMultipartBody. It is used by the streaming Transcribe entrypoint
+// (TranscribeReader) where the audio bytes did not originate from a file
+// on disk (e.g. browser upload bytes received through the HTTP server).
+func buildMultipartBodyFromBytes(audioBytes []byte, fileName, model, language string) (body []byte, boundary string, err error) {
 	boundary, err = newBoundary()
 	if err != nil {
 		return nil, "", fmt.Errorf("generate boundary: %w", err)
 	}
 
-	audioBytes, err := os.ReadFile(wavPath)
-	if err != nil {
-		return nil, "", fmt.Errorf("read wav file: %w", err)
+	if fileName == "" {
+		// Defensive default — the Content-Disposition filename is required
+		// by some OpenAI-compatible proxies even when the upstream Whisper
+		// implementation ignores it.
+		fileName = "audio.wav"
 	}
-
-	fileName := filepath.Base(wavPath)
 
 	// Build in a bytes-friendly way using a sequence of writes. We size
 	// the slice generously then let append grow it as needed; the cost of
@@ -67,11 +102,12 @@ func buildMultipartBody(wavPath, model, language string) (body []byte, boundary 
 	}
 
 	// File part has additional headers (filename + Content-Type).
+	contentType := audioContentType(fileName)
 	buf = append(buf, "--"...)
 	buf = append(buf, boundary...)
 	buf = append(buf, "\r\n"...)
 	buf = append(buf, fmt.Sprintf("Content-Disposition: form-data; name=%q; filename=%q\r\n", "file", fileName)...)
-	buf = append(buf, fmt.Sprintf("Content-Type: %s\r\n\r\n", transcriptionContentType)...)
+	buf = append(buf, fmt.Sprintf("Content-Type: %s\r\n\r\n", contentType)...)
 	buf = append(buf, audioBytes...)
 	buf = append(buf, "\r\n"...)
 

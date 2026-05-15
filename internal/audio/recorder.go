@@ -4,11 +4,18 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"runtime"
 	"sync"
 	"unsafe"
 
 	"github.com/gen2brain/malgo"
 )
+
+// peakHistorySize is the number of recent peak amplitudes retained for the
+// audio-level meter UI. Seven matches the rendered bar width in
+// internal/ui's meterBar so the consumer can pass the slice through
+// without resizing.
+const peakHistorySize = 7
 
 // Recorder captures microphone input as 16 kHz mono PCM16 and writes a WAV
 // file on Stop. A Recorder is single-use within a Start/Stop pair: after
@@ -21,12 +28,14 @@ import (
 type Recorder struct {
 	deviceUID string
 
-	// mu guards started, stopped, samples, and device (the malgo runtime
-	// invokes onSamples from a background thread).
+	// mu guards started, stopped, samples, peaks, and device (the malgo
+	// runtime invokes onSamples from a background thread; PeakHistory may
+	// be called concurrently from the UI redraw goroutine).
 	mu      sync.Mutex
 	started bool
 	stopped bool
 	samples []byte
+	peaks   [peakHistorySize]float64
 
 	ctx    *malgo.AllocatedContext
 	device *malgo.Device
@@ -97,9 +106,18 @@ func (r *Recorder) Start() error {
 			r.mu.Unlock()
 			return fmt.Errorf("audio: input device %q not found", r.deviceUID)
 		}
-		// Stash the DeviceID on the heap so its pointer remains valid
-		// for the lifetime of the malgo Device.
+		// Stash the DeviceID and pin it so its address can cross the
+		// cgo boundary. Go 1.21+ rejects passing a Go pointer (the
+		// DeviceConfig struct) that itself contains a Go pointer
+		// (DeviceID field) into C without explicit pinning. The pin
+		// must outlive malgo.InitDevice below; ma_device_init copies
+		// the bytes into its own state and doesn't need our pointer
+		// after it returns, so deferring Unpin until Start completes
+		// is safe.
 		stored := id
+		var pinner runtime.Pinner
+		defer pinner.Unpin()
+		pinner.Pin(&stored)
 		deviceConfig.Capture.DeviceID = unsafe.Pointer(&stored)
 	}
 
@@ -107,8 +125,20 @@ func (r *Recorder) Start() error {
 		if len(pSample) == 0 {
 			return
 		}
+		// Peak amplitude over this callback buffer. Done outside the lock
+		// — it's a pure function of the input bytes — so the audio
+		// thread spends less time blocked on r.mu when PeakHistory races
+		// from the UI goroutine.
+		peak := computePeak(pSample)
 		r.mu.Lock()
 		r.samples = append(r.samples, pSample...)
+		// Shift the ring left by one and append the new peak at the end.
+		// A copy() call would also work but the small constant width
+		// makes the unrolled shift clearer.
+		for i := 0; i < len(r.peaks)-1; i++ {
+			r.peaks[i] = r.peaks[i+1]
+		}
+		r.peaks[len(r.peaks)-1] = peak
 		r.mu.Unlock()
 	}
 
@@ -204,6 +234,53 @@ func (r *Recorder) Stop() (string, error) {
 		return "", err
 	}
 	return path, nil
+}
+
+// PeakHistory returns a snapshot of the most recent peak amplitudes
+// observed in the audio data callback. The returned slice always has
+// length [peakHistorySize] (currently 7); slots that haven't been filled
+// yet (e.g. immediately after Start) hold zeros. Index 0 is the oldest
+// retained peak; the last index is the newest.
+//
+// Safe for concurrent reads while the audio thread is invoking onSamples.
+// The returned slice is a fresh copy; mutating it does not affect the
+// recorder's internal state.
+func (r *Recorder) PeakHistory() []float64 {
+	out := make([]float64, peakHistorySize)
+	r.mu.Lock()
+	for i := range r.peaks {
+		out[i] = r.peaks[i]
+	}
+	r.mu.Unlock()
+	return out
+}
+
+// computePeak returns the largest absolute sample value in pcm,
+// interpreted as little-endian PCM16, normalized to [0, 1]. The input is
+// expected to be a multiple of 2 bytes per sample; a trailing odd byte
+// (which malgo doesn't produce in practice) is silently dropped.
+//
+// Extracted as a top-level helper so PeakHistory's accuracy can be tested
+// without a real audio device.
+func computePeak(pcm []byte) float64 {
+	var peak int32
+	n := len(pcm) - len(pcm)%2
+	for i := 0; i < n; i += 2 {
+		// Little-endian int16 decode.
+		sample := int16(pcm[i]) | int16(pcm[i+1])<<8
+		v := int32(sample)
+		if v < 0 {
+			v = -v
+		}
+		if v > peak {
+			peak = v
+		}
+	}
+	// 32768 is the magnitude of the most-negative int16 (-32768). Dividing
+	// by it normalizes a true full-scale signal to 1.0; positive samples
+	// max out at 32767/32768 ≈ 0.99997, which is close enough that the
+	// meter saturation looks correct.
+	return float64(peak) / 32768.0
 }
 
 // Close releases any held device handles and malgo context. Safe to call

@@ -15,7 +15,13 @@
 - [ ] `make test` passes
 - Manual smoke notes:
 
-<!-- e.g. ran `flowstate --enter --paste`, verified audio capture + paste on macOS. -->
+<!-- e.g. ran `flowstate --output paste` on macOS, verified clipboard restore after paste. -->
+
+## Screenshots / asciinema (if user-visible)
+
+<!-- Drop a screenshot, GIF, or asciinema link if this PR changes anything a user can see —
+     status output, flag help, paste behavior, audio meter, error messages, etc.
+     Skip for pure refactors / internal changes. -->
 
 ## Checklist
 

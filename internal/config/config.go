@@ -5,6 +5,7 @@ package config
 
 import (
 	"fmt"
+	"os"
 	"sort"
 	"strings"
 )
@@ -13,20 +14,30 @@ import (
 //
 // Field names match the snake_case keys in the spec. Pointer-free zero values
 // let us treat an unset field as "use the documented default" in [Defaults].
+//
+// Note: the Groq API key is intentionally NOT a field here. It is read at
+// runtime from the GROQ_API_KEY environment variable (or GROQ_API_TOKEN as
+// a fallback) by [ResolveAPIKey]. Keeping secrets out of the config file
+// makes them less likely to be checked in or shared accidentally.
 type Config struct {
-	APIKey               string            `toml:"api_key"`
-	Trigger              string            `toml:"trigger"`
-	PTTKey               string            `toml:"ptt_key"`
-	BaseURL              string            `toml:"base_url"`
-	TranscriptionModel   string            `toml:"transcription_model"`
-	CleanupModel         string            `toml:"cleanup_model"`
-	CleanupFallbackModel string            `toml:"cleanup_fallback_model"`
-	Language             string            `toml:"language"`
-	InputDevice          string            `toml:"input_device"`
-	MuteWhileRecording   bool              `toml:"mute_while_recording"`
-	OutputMode           string            `toml:"output_mode"`
-	ActivePrompt         string            `toml:"active_prompt"`
-	Prompts              map[string]string `toml:"prompts"`
+	Trigger                     string            `toml:"trigger"`
+	PTTKey                      string            `toml:"ptt_key"`
+	BaseURL                     string            `toml:"base_url"`
+	TranscriptionModel          string            `toml:"transcription_model"`
+	CleanupModel                string            `toml:"cleanup_model"`
+	CleanupFallbackModel        string            `toml:"cleanup_fallback_model"`
+	Language                    string            `toml:"language"`
+	OutputLanguage              string            `toml:"output_language"`
+	InputDevice                 string            `toml:"input_device"`
+	MuteWhileRecording          bool              `toml:"mute_while_recording"`
+	OutputMode                  string            `toml:"output_mode"`
+	PreserveClipboardAfterPaste bool              `toml:"preserve_clipboard_after_paste"`
+	ActivePrompt                string            `toml:"active_prompt"`
+	CustomVocabulary            string            `toml:"custom_vocabulary"`
+	Colors                      string            `toml:"colors"`
+	MaxTimeSeconds              int               `toml:"max_time_seconds"`
+	PasteDelaySeconds           int               `toml:"paste_delay_seconds"`
+	Prompts                     map[string]string `toml:"prompts"`
 
 	// warnings is populated during Load for soft issues (e.g. unrecognized
 	// keys surfaced by the TOML decoder). Read via [Config.Warnings].
@@ -38,18 +49,23 @@ type Config struct {
 // freshly-written files (Load preserves whatever the user has on disk).
 func Defaults() Config {
 	return Config{
-		APIKey:               "",
-		Trigger:              "enter",
-		PTTKey:               "space",
-		BaseURL:              "https://api.groq.com/openai/v1",
-		TranscriptionModel:   "whisper-large-v3",
-		CleanupModel:         "openai/gpt-oss-20b",
-		CleanupFallbackModel: "meta-llama/llama-4-scout-17b-16e-instruct",
-		Language:             "",
-		InputDevice:          "",
-		MuteWhileRecording:   true,
-		OutputMode:           "stdout,clipboard",
-		ActivePrompt:         "default",
+		Trigger:                     "enter",
+		PTTKey:                      "space",
+		BaseURL:                     "https://api.groq.com/openai/v1",
+		TranscriptionModel:          "whisper-large-v3",
+		CleanupModel:                "openai/gpt-oss-20b",
+		CleanupFallbackModel:        "meta-llama/llama-4-scout-17b-16e-instruct",
+		Language:                    "en",
+		OutputLanguage:              "",
+		InputDevice:                 "",
+		MuteWhileRecording:          true,
+		OutputMode:                  "stdout,clipboard",
+		PreserveClipboardAfterPaste: true,
+		ActivePrompt:                "default",
+		CustomVocabulary:            "",
+		Colors:                      "auto",
+		MaxTimeSeconds:              0,
+		PasteDelaySeconds:           0,
 	}
 }
 
@@ -68,10 +84,19 @@ var validOutputModes = map[string]struct{}{
 	"paste":     {},
 }
 
+// validColorModes enumerates the allowed values for [Config.Colors]. The
+// empty string is also accepted at validate time and treated as "auto" —
+// existing configs that predate this field load without a forced rewrite.
+var validColorModes = map[string]struct{}{
+	"auto":   {},
+	"always": {},
+	"never":  {},
+}
+
 // Validate checks that the parsed Config is internally consistent. It does
-// NOT require [Config.APIKey] to be non-empty — that's checked separately by
-// [Config.RequireAPIKey] so `flowstate config init` and `config path` can
-// run before the user has set a key.
+// NOT require an API key — that's checked separately by [ResolveAPIKey] so
+// `flowstate config init` and `config path` can run before the user has
+// exported one.
 func (c *Config) Validate() error {
 	if _, ok := validTriggers[c.Trigger]; !ok {
 		return fmt.Errorf("invalid trigger %q: must be one of %s",
@@ -87,6 +112,24 @@ func (c *Config) Validate() error {
 	}
 	if _, ok := c.Prompts[c.ActivePrompt]; !ok {
 		return fmt.Errorf("active_prompt %q does not match any key under [prompts]", c.ActivePrompt)
+	}
+
+	// The empty string is tolerated — an existing config that predates
+	// the colors field shouldn't suddenly fail Validate. The runtime
+	// resolver in cmd/flowstate treats "" the same as "auto".
+	if c.Colors != "" {
+		if _, ok := validColorModes[c.Colors]; !ok {
+			return fmt.Errorf("invalid colors %q: must be one of %s",
+				c.Colors, joinKeys(validColorModes))
+		}
+	}
+
+	if c.MaxTimeSeconds < 0 {
+		return fmt.Errorf("invalid max_time_seconds %d: must be >= 0 (0 = disabled)", c.MaxTimeSeconds)
+	}
+
+	if c.PasteDelaySeconds < 0 {
+		return fmt.Errorf("invalid paste_delay_seconds %d: must be >= 0 (0 = no delay)", c.PasteDelaySeconds)
 	}
 
 	return nil
@@ -109,13 +152,38 @@ func (c *Config) OutputDestinations() (stdout, clipboard, paste bool) {
 	return
 }
 
-// RequireAPIKey returns a friendly error if [Config.APIKey] is empty,
-// pointing the user at the file they need to edit.
-func (c *Config) RequireAPIKey(path string) error {
-	if strings.TrimSpace(c.APIKey) == "" {
-		return fmt.Errorf("api_key is empty; edit %s and add your Groq key (get one free at https://groq.com)", path)
+// APIKeyMissingError is returned by [ResolveAPIKey] when neither
+// GROQ_API_KEY nor GROQ_API_TOKEN is set in the environment. Exported so
+// callers that want to special-case the missing-key path (rather than rely
+// on the error message) can use errors.As.
+type APIKeyMissingError struct{}
+
+// Error returns a friendly message naming both env vars and pointing the
+// user at console.groq.com to get a free key.
+func (*APIKeyMissingError) Error() string {
+	return "Groq API key not found. Set GROQ_API_KEY (preferred) or GROQ_API_TOKEN in your environment. Get a free key at https://console.groq.com."
+}
+
+// ResolveAPIKey returns the Groq API key from the environment.
+//
+// Resolution order:
+//  1. GROQ_API_KEY (preferred)
+//  2. GROQ_API_TOKEN (accepted as a fallback for compatibility)
+//
+// If neither is set (or both are empty / whitespace-only), it returns an
+// [*APIKeyMissingError] with a user-facing message.
+//
+// The key is intentionally not read from the on-disk config file: keeping
+// secrets out of TOML reduces the risk of them ending up in git, backups,
+// or shared screenshots.
+func ResolveAPIKey() (string, error) {
+	if v := strings.TrimSpace(os.Getenv("GROQ_API_KEY")); v != "" {
+		return v, nil
 	}
-	return nil
+	if v := strings.TrimSpace(os.Getenv("GROQ_API_TOKEN")); v != "" {
+		return v, nil
+	}
+	return "", &APIKeyMissingError{}
 }
 
 // parseOutputMode validates the raw string form of output_mode and returns

@@ -27,6 +27,8 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"os"
+	"path/filepath"
 	"strings"
 	"time"
 )
@@ -123,12 +125,44 @@ type transcriptionSegment struct {
 // If ctx has a shorter deadline, that wins. Any error returned wraps a
 // sentinel where useful (context.DeadlineExceeded, context.Canceled) so
 // callers can switch on errors.Is.
+//
+// Implementation note: Transcribe reads the file into memory once and
+// delegates to TranscribeReader. The disk path is preserved so existing
+// callers (the record pipeline) keep their current signature.
 func (c *Client) Transcribe(ctx context.Context, wavPath string) (string, error) {
+	f, err := os.Open(wavPath)
+	if err != nil {
+		return "", fmt.Errorf("open audio file: %w", err)
+	}
+	defer f.Close()
+	return c.TranscribeReader(ctx, f, filepath.Base(wavPath))
+}
+
+// TranscribeReader is the streaming-friendly form of Transcribe: it accepts
+// a reader containing the audio bytes plus the filename Groq should see in
+// the multipart "file" part header. The filename's extension picks the
+// Content-Type ("recording.webm" → audio/webm, "audio.wav" → audio/wav,
+// etc.).
+//
+// The reader is fully drained into memory before the request fires. We need
+// a known Content-Length for the outer request (Groq's edge has historically
+// been unhappy with chunked-encoded multipart uploads), and multipart bodies
+// in flowstate are always small enough that a single in-memory copy is
+// cheaper than the alternative.
+func (c *Client) TranscribeReader(ctx context.Context, r io.Reader, filename string) (string, error) {
 	if ctx == nil {
 		ctx = context.Background()
 	}
+	if r == nil {
+		return "", fmt.Errorf("transcribe: nil reader")
+	}
 
-	body, boundary, err := buildMultipartBody(wavPath, c.model, c.language)
+	audioBytes, err := io.ReadAll(r)
+	if err != nil {
+		return "", fmt.Errorf("read audio: %w", err)
+	}
+
+	body, boundary, err := buildMultipartBodyFromBytes(audioBytes, filename, c.model, c.language)
 	if err != nil {
 		return "", err
 	}

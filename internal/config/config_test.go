@@ -175,7 +175,6 @@ func TestInit_AppliesPerms(t *testing.T) {
 func TestLoad_ValidConfig(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "config.toml")
 	body := `
-api_key = "sk-test"
 trigger = "push-to-talk"
 ptt_key = "f12"
 base_url = "https://example.com/v1"
@@ -196,9 +195,6 @@ default = "hello"
 	cfg, err := Load(path)
 	if err != nil {
 		t.Fatalf("Load: %v", err)
-	}
-	if cfg.APIKey != "sk-test" {
-		t.Errorf("APIKey = %q", cfg.APIKey)
 	}
 	if cfg.Trigger != "push-to-talk" {
 		t.Errorf("Trigger = %q", cfg.Trigger)
@@ -355,34 +351,263 @@ func TestOutputDestinations_Subset(t *testing.T) {
 	}
 }
 
-// TestRequireAPIKey_EmptyErrors covers the empty case and the friendly
-// error message.
-func TestRequireAPIKey_EmptyErrors(t *testing.T) {
-	cfg := validBaseConfig()
-	cfg.APIKey = ""
-	err := cfg.RequireAPIKey("/etc/flowstate/config.toml")
-	if err == nil {
-		t.Fatal("RequireAPIKey: want error, got nil")
-	}
-	if !strings.Contains(err.Error(), "/etc/flowstate/config.toml") {
-		t.Errorf("error should mention the path; got: %v", err)
-	}
-	if !strings.Contains(err.Error(), "api_key") {
-		t.Errorf("error should mention api_key; got: %v", err)
-	}
+// TestResolveAPIKey_GROQ_API_KEY pins the preferred env var: GROQ_API_KEY
+// alone is enough and its value is returned verbatim.
+func TestResolveAPIKey_GROQ_API_KEY(t *testing.T) {
+	t.Setenv("GROQ_API_KEY", "gsk_primary")
+	t.Setenv("GROQ_API_TOKEN", "")
 
-	cfg.APIKey = "   " // whitespace also counts as empty
-	if err := cfg.RequireAPIKey("/tmp/x"); err == nil {
-		t.Error("whitespace-only api_key should error")
+	got, err := ResolveAPIKey()
+	if err != nil {
+		t.Fatalf("ResolveAPIKey: %v", err)
+	}
+	if got != "gsk_primary" {
+		t.Errorf("ResolveAPIKey() = %q; want %q", got, "gsk_primary")
 	}
 }
 
-// TestRequireAPIKey_NonEmptyOk pins the happy path.
-func TestRequireAPIKey_NonEmptyOk(t *testing.T) {
-	cfg := validBaseConfig()
-	cfg.APIKey = "sk-something"
-	if err := cfg.RequireAPIKey("/tmp/x"); err != nil {
-		t.Errorf("non-empty api_key: %v", err)
+// TestResolveAPIKey_GROQ_API_TOKEN_Fallback verifies the compat fallback
+// fires when the preferred var is unset.
+func TestResolveAPIKey_GROQ_API_TOKEN_Fallback(t *testing.T) {
+	t.Setenv("GROQ_API_KEY", "")
+	t.Setenv("GROQ_API_TOKEN", "gsk_fallback")
+
+	got, err := ResolveAPIKey()
+	if err != nil {
+		t.Fatalf("ResolveAPIKey: %v", err)
+	}
+	if got != "gsk_fallback" {
+		t.Errorf("ResolveAPIKey() = %q; want %q", got, "gsk_fallback")
+	}
+}
+
+// TestResolveAPIKey_BothSet_PrefersAPIKey pins the priority order when
+// both env vars are populated: GROQ_API_KEY always wins.
+func TestResolveAPIKey_BothSet_PrefersAPIKey(t *testing.T) {
+	t.Setenv("GROQ_API_KEY", "gsk_primary")
+	t.Setenv("GROQ_API_TOKEN", "gsk_fallback")
+
+	got, err := ResolveAPIKey()
+	if err != nil {
+		t.Fatalf("ResolveAPIKey: %v", err)
+	}
+	if got != "gsk_primary" {
+		t.Errorf("ResolveAPIKey() = %q; want %q (GROQ_API_KEY should win)",
+			got, "gsk_primary")
+	}
+}
+
+// TestResolveAPIKey_NeitherSet_ReturnsError verifies the friendly error
+// path. The message must name GROQ_API_KEY (so the user knows what to
+// export) and point at console.groq.com (so they know where to get one).
+func TestResolveAPIKey_NeitherSet_ReturnsError(t *testing.T) {
+	t.Setenv("GROQ_API_KEY", "")
+	t.Setenv("GROQ_API_TOKEN", "")
+
+	got, err := ResolveAPIKey()
+	if err == nil {
+		t.Fatalf("ResolveAPIKey: want error, got value %q", got)
+	}
+	if got != "" {
+		t.Errorf("ResolveAPIKey on error: got value %q; want empty", got)
+	}
+	msg := err.Error()
+	if !strings.Contains(msg, "GROQ_API_KEY") {
+		t.Errorf("error should mention GROQ_API_KEY; got: %v", err)
+	}
+	if !strings.Contains(msg, "console.groq.com") {
+		t.Errorf("error should point at console.groq.com; got: %v", err)
+	}
+
+	// And it must be the typed sentinel error so callers can errors.As it.
+	var missing *APIKeyMissingError
+	if !errors.As(err, &missing) {
+		t.Errorf("error should be *APIKeyMissingError; got %T", err)
+	}
+}
+
+// TestDefaults_NewFields pins the documented defaults for the three
+// FreeFlow-parity settings ported in TASK-131.
+func TestDefaults_NewFields(t *testing.T) {
+	d := Defaults()
+	if d.OutputLanguage != "" {
+		t.Errorf("OutputLanguage default = %q; want \"\"", d.OutputLanguage)
+	}
+	if !d.PreserveClipboardAfterPaste {
+		t.Errorf("PreserveClipboardAfterPaste default = false; want true")
+	}
+	if d.CustomVocabulary != "" {
+		t.Errorf("CustomVocabulary default = %q; want \"\"", d.CustomVocabulary)
+	}
+}
+
+// TestInit_WritesNewFields verifies the rendered config template surfaces
+// the three new field names so users can find and edit them. We only
+// assert presence-by-name — the surrounding comments are documentation
+// and can change without breaking the field contract.
+func TestInit_WritesNewFields(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "config.toml")
+	if err := Init(path, false); err != nil {
+		t.Fatalf("Init: %v", err)
+	}
+	body, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("read: %v", err)
+	}
+	for _, key := range []string{"output_language", "preserve_clipboard_after_paste", "custom_vocabulary"} {
+		if !strings.Contains(string(body), key) {
+			t.Errorf("rendered config missing %q", key)
+		}
+	}
+}
+
+// TestLoad_RoundtripsNewFields writes a hand-rolled config that sets the
+// three new fields, then verifies Load reads them back.
+func TestLoad_RoundtripsNewFields(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "config.toml")
+	body := `
+trigger = "enter"
+ptt_key = "space"
+base_url = "https://api.groq.com/openai/v1"
+transcription_model = "whisper-large-v3"
+cleanup_model = "openai/gpt-oss-20b"
+cleanup_fallback_model = "meta-llama/llama-4-scout-17b-16e-instruct"
+output_mode = "stdout,clipboard,paste"
+mute_while_recording = true
+active_prompt = "default"
+output_language = "French"
+preserve_clipboard_after_paste = false
+custom_vocabulary = """
+alpha
+beta, gamma
+"""
+
+[prompts]
+default = "x"
+`
+	if err := os.WriteFile(path, []byte(body), 0o600); err != nil {
+		t.Fatalf("write: %v", err)
+	}
+	cfg, err := Load(path)
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if cfg.OutputLanguage != "French" {
+		t.Errorf("OutputLanguage = %q; want %q", cfg.OutputLanguage, "French")
+	}
+	if cfg.PreserveClipboardAfterPaste {
+		t.Errorf("PreserveClipboardAfterPaste = true; want false")
+	}
+	if !strings.Contains(cfg.CustomVocabulary, "alpha") || !strings.Contains(cfg.CustomVocabulary, "gamma") {
+		t.Errorf("CustomVocabulary missing expected terms: %q", cfg.CustomVocabulary)
+	}
+}
+
+// TestDefaults_Colors pins the documented default for the colors field. A
+// fresh config produced by Defaults() should opt into "auto" so a brand-new
+// user gets colors on TTY without explicit configuration.
+func TestDefaults_Colors(t *testing.T) {
+	if got := Defaults().Colors; got != "auto" {
+		t.Errorf("Defaults().Colors = %q; want %q", got, "auto")
+	}
+}
+
+// TestValidate_Colors covers the small enum, including the empty-string
+// tolerance: an existing config written before TASK-135 (and so missing
+// the key entirely) must still pass Validate.
+func TestValidate_Colors(t *testing.T) {
+	cases := []struct {
+		colors  string
+		wantErr bool
+	}{
+		{"auto", false},
+		{"always", false},
+		{"never", false},
+		{"", false},        // legacy configs: empty → treated as auto at runtime.
+		{"AUTO", true},     // case-sensitive.
+		{"sometimes", true},
+		{"on", true},
+	}
+	for _, tc := range cases {
+		tc := tc
+		t.Run(tc.colors, func(t *testing.T) {
+			cfg := validBaseConfig()
+			cfg.Colors = tc.colors
+			err := cfg.Validate()
+			if tc.wantErr && err == nil {
+				t.Errorf("Colors=%q: want error, got nil", tc.colors)
+			}
+			if !tc.wantErr && err != nil {
+				t.Errorf("Colors=%q: unexpected error: %v", tc.colors, err)
+			}
+		})
+	}
+}
+
+// TestInit_WritesColorsField verifies the init template surfaces the
+// colors key so users can find and edit it in the generated file.
+func TestInit_WritesColorsField(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "config.toml")
+	if err := Init(path, false); err != nil {
+		t.Fatalf("Init: %v", err)
+	}
+	body, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("read: %v", err)
+	}
+	if !strings.Contains(string(body), "colors") {
+		t.Errorf("rendered config missing colors key")
+	}
+	if !strings.Contains(string(body), `colors = "auto"`) {
+		t.Errorf("rendered config should default colors to \"auto\"; body:\n%s", body)
+	}
+}
+
+// TestLoad_RoundtripsColors verifies Load reads the colors field back from
+// disk and that all three documented values survive the roundtrip.
+func TestLoad_RoundtripsColors(t *testing.T) {
+	for _, mode := range []string{"auto", "always", "never"} {
+		mode := mode
+		t.Run(mode, func(t *testing.T) {
+			path := filepath.Join(t.TempDir(), "config.toml")
+			body := `
+trigger = "enter"
+ptt_key = "space"
+base_url = "https://api.groq.com/openai/v1"
+transcription_model = "whisper-large-v3"
+cleanup_model = "openai/gpt-oss-20b"
+cleanup_fallback_model = "meta-llama/llama-4-scout-17b-16e-instruct"
+output_mode = "stdout"
+mute_while_recording = true
+active_prompt = "default"
+colors = "` + mode + `"
+
+[prompts]
+default = "x"
+`
+			if err := os.WriteFile(path, []byte(body), 0o600); err != nil {
+				t.Fatalf("write: %v", err)
+			}
+			cfg, err := Load(path)
+			if err != nil {
+				t.Fatalf("Load: %v", err)
+			}
+			if cfg.Colors != mode {
+				t.Errorf("Colors = %q; want %q", cfg.Colors, mode)
+			}
+		})
+	}
+}
+
+// TestResolveAPIKey_WhitespaceOnly_ReturnsError makes sure that an env var
+// set to whitespace doesn't accidentally pass as a valid key (which would
+// lead to a useless 401 from Groq later in the pipeline).
+func TestResolveAPIKey_WhitespaceOnly_ReturnsError(t *testing.T) {
+	t.Setenv("GROQ_API_KEY", "   ")
+	t.Setenv("GROQ_API_TOKEN", "\t\n")
+
+	if _, err := ResolveAPIKey(); err == nil {
+		t.Fatal("ResolveAPIKey with whitespace-only env vars: want error, got nil")
 	}
 }
 
@@ -408,4 +633,69 @@ func validBaseConfig() Config {
 		"default": "stub",
 	}
 	return c
+}
+
+// TestDefaults_MaxTimeSeconds pins the documented default: 0 (disabled).
+// A non-zero default would silently auto-stop recordings for users who
+// haven't opted into a max-time, which would be surprising.
+func TestDefaults_MaxTimeSeconds(t *testing.T) {
+	if got := Defaults().MaxTimeSeconds; got != 0 {
+		t.Errorf("Defaults().MaxTimeSeconds = %d; want 0", got)
+	}
+}
+
+// TestValidate_MaxTimeSeconds_Negative rejects negative values. Zero is
+// the disabled sentinel; positives are honored as a duration in seconds.
+func TestValidate_MaxTimeSeconds(t *testing.T) {
+	cases := []struct {
+		max     int
+		wantErr bool
+	}{
+		{0, false},  // disabled
+		{5, false},  // typical
+		{600, false}, // 10 minutes — arbitrary upper-realm sanity
+		{-1, true},  // negative is meaningless
+		{-300, true},
+	}
+	for _, tc := range cases {
+		c := validBaseConfig()
+		c.MaxTimeSeconds = tc.max
+		err := c.Validate()
+		gotErr := err != nil
+		if gotErr != tc.wantErr {
+			t.Errorf("Validate(MaxTimeSeconds=%d) err = %v; wantErr = %v", tc.max, err, tc.wantErr)
+		}
+	}
+}
+
+// TestDefaults_PasteDelaySeconds pins the documented default: 0 (no delay).
+// A non-zero default would silently pause paste output for users who
+// didn't opt in.
+func TestDefaults_PasteDelaySeconds(t *testing.T) {
+	if got := Defaults().PasteDelaySeconds; got != 0 {
+		t.Errorf("Defaults().PasteDelaySeconds = %d; want 0", got)
+	}
+}
+
+// TestValidate_PasteDelaySeconds rejects negatives. Zero = no delay;
+// positives stretch the gap between clipboard write and paste keystroke.
+func TestValidate_PasteDelaySeconds(t *testing.T) {
+	cases := []struct {
+		delay   int
+		wantErr bool
+	}{
+		{0, false},
+		{1, false},
+		{30, false},
+		{-1, true},
+	}
+	for _, tc := range cases {
+		c := validBaseConfig()
+		c.PasteDelaySeconds = tc.delay
+		err := c.Validate()
+		gotErr := err != nil
+		if gotErr != tc.wantErr {
+			t.Errorf("Validate(PasteDelaySeconds=%d) err = %v; wantErr = %v", tc.delay, err, tc.wantErr)
+		}
+	}
 }

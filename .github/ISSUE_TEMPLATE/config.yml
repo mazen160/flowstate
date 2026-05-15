@@ -1,0 +1,11 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Show & Tell
+    url: https://github.com/mazen160/flowstate/discussions/categories/show-and-tell
+    about: Built something cool with flowstate? Share your workflow, config, or screencast.
+  - name: Q&A
+    url: https://github.com/mazen160/flowstate/discussions/categories/q-a
+    about: "Have a 'how do I…?' question? Ask the community here before opening an issue."
+  - name: Ideas
+    url: https://github.com/mazen160/flowstate/discussions/categories/ideas
+    about: Half-baked thought, design discussion, or "what if flowstate could…?" — start here.

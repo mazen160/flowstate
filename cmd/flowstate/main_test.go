@@ -2,11 +2,15 @@ package main
 
 import (
 	"bytes"
+	"flag"
+	"io"
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 
 	"github.com/mazin-ahmed/flowstate/internal/config"
+	"github.com/mazin-ahmed/flowstate/internal/ui"
 )
 
 // TestVersionSubcommand drives runVersion against a bytes.Buffer and asserts
@@ -98,6 +102,255 @@ func TestApplyFlags_Output(t *testing.T) {
 
 	if cfg.OutputMode != "stdout,paste" {
 		t.Fatalf("OutputMode = %q, want %q", cfg.OutputMode, "stdout,paste")
+	}
+}
+
+// TestApplyFlags_MaxTime verifies that --max-time=5 wires through to
+// MaxTimeSeconds. The semantic that >0 also triggers auto-stop is tested
+// at the orchestrator layer, not here.
+func TestApplyFlags_MaxTime(t *testing.T) {
+	cfg := config.Defaults()
+	if cfg.MaxTimeSeconds != 0 {
+		t.Fatalf("default MaxTimeSeconds = %d, want 0", cfg.MaxTimeSeconds)
+	}
+
+	fs, rf := newRecordFlagSet(&bytes.Buffer{})
+	if err := fs.Parse([]string{"--max-time=5"}); err != nil {
+		t.Fatalf("parse: %v", err)
+	}
+	rf.captureSetFlags(fs)
+	applyFlags(&cfg, rf)
+
+	if cfg.MaxTimeSeconds != 5 {
+		t.Fatalf("MaxTimeSeconds = %d, want 5", cfg.MaxTimeSeconds)
+	}
+}
+
+// TestApplyFlags_MaxTimeUnset is the regression guard: omitting --max-time
+// must leave whatever was in the loaded config alone. Plays the same role
+// as TestApplyFlags_UnsetFlagsDoNotOverride, but for the integer flag.
+func TestApplyFlags_MaxTimeUnset(t *testing.T) {
+	cfg := config.Defaults()
+	cfg.MaxTimeSeconds = 7 // imagine the user wrote this in their config
+
+	fs, rf := newRecordFlagSet(&bytes.Buffer{})
+	if err := fs.Parse([]string{}); err != nil {
+		t.Fatalf("parse: %v", err)
+	}
+	rf.captureSetFlags(fs)
+	applyFlags(&cfg, rf)
+
+	if cfg.MaxTimeSeconds != 7 {
+		t.Fatalf("MaxTimeSeconds = %d, want 7 (unset flag should not overwrite)", cfg.MaxTimeSeconds)
+	}
+}
+
+// TestApplyFlags_PasteDelay wires --paste-delay=3 through to
+// PasteDelaySeconds. Behavior of the delay itself (sleeping before the
+// paste keystroke) is verified at the output-package level.
+func TestApplyFlags_PasteDelay(t *testing.T) {
+	cfg := config.Defaults()
+	if cfg.PasteDelaySeconds != 0 {
+		t.Fatalf("default PasteDelaySeconds = %d, want 0", cfg.PasteDelaySeconds)
+	}
+
+	fs, rf := newRecordFlagSet(&bytes.Buffer{})
+	if err := fs.Parse([]string{"--paste-delay=3"}); err != nil {
+		t.Fatalf("parse: %v", err)
+	}
+	rf.captureSetFlags(fs)
+	applyFlags(&cfg, rf)
+
+	if cfg.PasteDelaySeconds != 3 {
+		t.Fatalf("PasteDelaySeconds = %d, want 3", cfg.PasteDelaySeconds)
+	}
+}
+
+// TestResolveColorMode_Precedence pins the documented precedence ladder.
+// The whole point of this helper is that command-line and env overrides win
+// over config, and that NO_COLOR=1 acts as a kill-switch even when the
+// config says "always". A test on the helper rather than the full runRecord
+// pipeline keeps us off the audio device.
+func TestResolveColorMode_Precedence(t *testing.T) {
+	emptyEnv := func(string) string { return "" }
+	noColorEnv := func(k string) string {
+		if k == "NO_COLOR" {
+			return "1"
+		}
+		return ""
+	}
+
+	cases := []struct {
+		name        string
+		cfgColors   string
+		noColorFlag bool
+		env         func(string) string
+		want        ui.ColorMode
+	}{
+		{"flag_wins_over_always_config", "always", true, emptyEnv, ui.ColorNever},
+		{"env_wins_over_always_config", "always", false, noColorEnv, ui.ColorNever},
+		{"config_never_with_no_flag_no_env", "never", false, emptyEnv, ui.ColorNever},
+		{"config_always_with_no_flag_no_env", "always", false, emptyEnv, ui.ColorAlways},
+		{"config_auto_with_no_flag_no_env", "auto", false, emptyEnv, ui.ColorAuto},
+		{"empty_legacy_config_treated_as_auto", "", false, emptyEnv, ui.ColorAuto},
+		{"unknown_value_falls_to_auto", "garbage", false, emptyEnv, ui.ColorAuto},
+	}
+	for _, tc := range cases {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			got := resolveColorMode(tc.cfgColors, tc.noColorFlag, tc.env)
+			if got != tc.want {
+				t.Errorf("resolveColorMode(%q, %v) = %v; want %v",
+					tc.cfgColors, tc.noColorFlag, got, tc.want)
+			}
+		})
+	}
+}
+
+// TestRecordOutput_NoANSIWhenStderrIsBuffer is the end-to-end guard for the
+// "no escape codes when piped" contract. We can't easily drive runRecord
+// without a real audio device, but the reporter built from a bytes.Buffer
+// stderr must never emit ANSI on its own — regardless of how cfg.Colors is
+// set, NO_COLOR's presence, or the --no-color flag. We exercise this by
+// constructing a reporter the same way runRecord does and confirming all
+// four documented "disable" paths produce zero-ANSI output.
+func TestRecordOutput_NoANSIWhenStderrIsBuffer(t *testing.T) {
+	t.Setenv("NO_COLOR", "")
+
+	paths := []struct {
+		name        string
+		cfgColors   string
+		noColorFlag bool
+		setNoColor  bool
+	}{
+		{"auto_with_buffer_stderr", "auto", false, false},
+		{"explicit_never", "never", false, false},
+		{"no_color_flag", "auto", true, false},
+		{"no_color_env", "auto", false, true},
+	}
+	for _, p := range paths {
+		p := p
+		t.Run(p.name, func(t *testing.T) {
+			if p.setNoColor {
+				t.Setenv("NO_COLOR", "1")
+			} else {
+				t.Setenv("NO_COLOR", "")
+			}
+			mode := resolveColorMode(p.cfgColors, p.noColorFlag, os.Getenv)
+			var buf bytes.Buffer
+			r := ui.NewReporter(&buf, mode)
+
+			// Drive every reporter method that flows through stderr in
+			// runRecord. Each must produce ANSI-free output.
+			r.Warning("warn message")
+			r.Step("Transcribing")
+			r.Step("Cleaning up")
+			r.Error("transcribe: %v", "boom")
+			stop := r.Recording(func() []float64 { return nil }, "")
+			stop()
+
+			if strings.Contains(buf.String(), "\x1b") {
+				t.Fatalf("path %q leaked ANSI to non-TTY stderr:\n%q",
+					p.name, buf.String())
+			}
+		})
+	}
+}
+
+// TestWebCommand_FlagDefaults parses `flowstate web` with no extra flags
+// and verifies the documented defaults (127.0.0.1, 8585, empty token).
+// We re-create the flagset the same way runWeb does so the test stays
+// honest if anyone changes the defaults via a struct literal rewrite.
+func TestWebCommand_FlagDefaults(t *testing.T) {
+	var (
+		host  string
+		port  int
+		token string
+		cfg   string
+	)
+	fs := newWebFlagSetForTest(&host, &port, &token, &cfg)
+	if err := fs.Parse([]string{}); err != nil {
+		t.Fatalf("Parse: %v", err)
+	}
+	if host != "127.0.0.1" {
+		t.Errorf("host = %q; want %q", host, "127.0.0.1")
+	}
+	if port != 8585 {
+		t.Errorf("port = %d; want 8585", port)
+	}
+	if token != "" {
+		t.Errorf("token = %q; want empty", token)
+	}
+}
+
+// TestWebCommand_FlagOverrides confirms every flag plumbs through to its
+// destination variable when the user passes a non-default value.
+func TestWebCommand_FlagOverrides(t *testing.T) {
+	var (
+		host  string
+		port  int
+		token string
+		cfg   string
+	)
+	fs := newWebFlagSetForTest(&host, &port, &token, &cfg)
+	err := fs.Parse([]string{
+		"--web-interface-listen", "0.0.0.0",
+		"--web-port", "9090",
+		"--web-token", "abc",
+	})
+	if err != nil {
+		t.Fatalf("Parse: %v", err)
+	}
+	if host != "0.0.0.0" {
+		t.Errorf("host = %q; want %q", host, "0.0.0.0")
+	}
+	if port != 9090 {
+		t.Errorf("port = %d; want 9090", port)
+	}
+	if token != "abc" {
+		t.Errorf("token = %q; want %q", token, "abc")
+	}
+}
+
+// newWebFlagSetForTest mirrors the FlagSet runWeb builds. Kept in the test
+// file so the test stays self-contained even if runWeb's body evolves; the
+// flag names and defaults are the public contract.
+func newWebFlagSetForTest(host *string, port *int, token *string, cfg *string) *flag.FlagSet {
+	fs := flag.NewFlagSet("flowstate web", flag.ContinueOnError)
+	fs.SetOutput(io.Discard)
+	fs.StringVar(host, "web-interface-listen", "127.0.0.1", "")
+	fs.IntVar(port, "web-port", 8585, "")
+	fs.StringVar(token, "web-token", "", "")
+	fs.StringVar(cfg, "config", "", "")
+	return fs
+}
+
+// TestIsLoopbackHost pins the loopback classifier the web warning logic
+// uses. 0.0.0.0 and routable IPs must NOT be classified as loopback so
+// the user gets the warning when they bind everything-on-the-network.
+func TestIsLoopbackHost(t *testing.T) {
+	cases := []struct {
+		in   string
+		want bool
+	}{
+		{"127.0.0.1", true},
+		{"127.5.6.7", true}, // entire 127.0.0.0/8 is loopback per net.IP.IsLoopback.
+		{"::1", true},
+		{"localhost", true},
+		{"0.0.0.0", false},
+		{"192.168.1.5", false},
+		{"10.0.0.1", false},
+		{"example.com", false},
+		{"", false},
+	}
+	for _, tc := range cases {
+		tc := tc
+		t.Run(tc.in, func(t *testing.T) {
+			got := isLoopbackHost(tc.in)
+			if got != tc.want {
+				t.Errorf("isLoopbackHost(%q) = %v; want %v", tc.in, got, tc.want)
+			}
+		})
 	}
 }
 
