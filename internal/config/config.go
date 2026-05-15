@@ -35,6 +35,7 @@ type Config struct {
 	ActivePrompt                string            `toml:"active_prompt"`
 	CustomVocabulary            string            `toml:"custom_vocabulary"`
 	Colors                      string            `toml:"colors"`
+	MaxTimeSeconds              int               `toml:"max_time_seconds"`
 	Prompts                     map[string]string `toml:"prompts"`
 
 	// warnings is populated during Load for soft issues (e.g. unrecognized
@@ -62,6 +63,7 @@ func Defaults() Config {
 		ActivePrompt:                "default",
 		CustomVocabulary:            "",
 		Colors:                      "auto",
+		MaxTimeSeconds:              0,
 	}
 }
 
@@ -118,6 +120,10 @@ func (c *Config) Validate() error {
 			return fmt.Errorf("invalid colors %q: must be one of %s",
 				c.Colors, joinKeys(validColorModes))
 		}
+	}
+
+	if c.MaxTimeSeconds < 0 {
+		return fmt.Errorf("invalid max_time_seconds %d: must be >= 0 (0 = disabled)", c.MaxTimeSeconds)
 	}
 
 	return nil

@@ -22,6 +22,7 @@ type recordFlags struct {
 	model      string
 	noMute     bool
 	noColor    bool
+	maxTime    int
 
 	// set is populated from fs.Visit so applyFlags can distinguish unset
 	// from explicit-empty. Keys are the long flag names (without the
@@ -47,6 +48,7 @@ func newRecordFlagSet(stderr io.Writer) (*flag.FlagSet, *recordFlags) {
 	fs.StringVar(&rf.pttKey, "ptt-key", "", "Override ptt_key (push-to-talk mode only).")
 	fs.StringVar(&rf.model, "model", "", "Override cleanup_model.")
 	fs.BoolVar(&rf.noColor, "no-color", false, "Disable ANSI colors in status output (equivalent to colors=\"never\").")
+	fs.IntVar(&rf.maxTime, "max-time", 0, "Auto-stop recording after N seconds and process. 0 disables (default).")
 
 	return fs, rf
 }
@@ -88,5 +90,12 @@ func applyFlags(cfg *config.Config, rf *recordFlags) {
 		// --no-mute is a "force off" switch; it doesn't take a value, so
 		// observing it set means the user wants mute_while_recording=false.
 		cfg.MuteWhileRecording = false
+	}
+	if rf.set["max-time"] {
+		// 0 explicitly disables; negative values are rejected by Validate
+		// if they ever sneak through (the flag itself accepts negatives —
+		// IntVar has no min bound — so we defer enforcement to the config
+		// layer's check).
+		cfg.MaxTimeSeconds = rf.maxTime
 	}
 }

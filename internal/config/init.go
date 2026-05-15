@@ -84,6 +84,14 @@ custom_vocabulary = """
 #              --no-color on the command line or setting NO_COLOR=1.
 colors = "auto"
 
+# Auto-stop recording after this many seconds. 0 disables auto-stop so
+# the recording continues until you press Enter (or release the PTT key).
+# When > 0 the recording stops automatically after the configured time
+# AND processes through the full pipeline (transcribe → cleanup → output
+# → exit 0). You can still stop earlier with Enter; first signal wins.
+# Override per-invocation with --max-time <seconds>.
+max_time_seconds = 0
+
 [prompts]
 # default — full FreeFlow-style cleanup with self-correction, formatting,
 # and developer-syntax handling. See README for the long version.

@@ -103,6 +103,46 @@ func TestApplyFlags_Output(t *testing.T) {
 	}
 }
 
+// TestApplyFlags_MaxTime verifies that --max-time=5 wires through to
+// MaxTimeSeconds. The semantic that >0 also triggers auto-stop is tested
+// at the orchestrator layer, not here.
+func TestApplyFlags_MaxTime(t *testing.T) {
+	cfg := config.Defaults()
+	if cfg.MaxTimeSeconds != 0 {
+		t.Fatalf("default MaxTimeSeconds = %d, want 0", cfg.MaxTimeSeconds)
+	}
+
+	fs, rf := newRecordFlagSet(&bytes.Buffer{})
+	if err := fs.Parse([]string{"--max-time=5"}); err != nil {
+		t.Fatalf("parse: %v", err)
+	}
+	rf.captureSetFlags(fs)
+	applyFlags(&cfg, rf)
+
+	if cfg.MaxTimeSeconds != 5 {
+		t.Fatalf("MaxTimeSeconds = %d, want 5", cfg.MaxTimeSeconds)
+	}
+}
+
+// TestApplyFlags_MaxTimeUnset is the regression guard: omitting --max-time
+// must leave whatever was in the loaded config alone. Plays the same role
+// as TestApplyFlags_UnsetFlagsDoNotOverride, but for the integer flag.
+func TestApplyFlags_MaxTimeUnset(t *testing.T) {
+	cfg := config.Defaults()
+	cfg.MaxTimeSeconds = 7 // imagine the user wrote this in their config
+
+	fs, rf := newRecordFlagSet(&bytes.Buffer{})
+	if err := fs.Parse([]string{}); err != nil {
+		t.Fatalf("parse: %v", err)
+	}
+	rf.captureSetFlags(fs)
+	applyFlags(&cfg, rf)
+
+	if cfg.MaxTimeSeconds != 7 {
+		t.Fatalf("MaxTimeSeconds = %d, want 7 (unset flag should not overwrite)", cfg.MaxTimeSeconds)
+	}
+}
+
 // TestResolveColorMode_Precedence pins the documented precedence ladder.
 // The whole point of this helper is that command-line and env overrides win
 // over config, and that NO_COLOR=1 acts as a kill-switch even when the
@@ -183,7 +223,7 @@ func TestRecordOutput_NoANSIWhenStderrIsBuffer(t *testing.T) {
 			r.Step("Transcribing")
 			r.Step("Cleaning up")
 			r.Error("transcribe: %v", "boom")
-			stop := r.Recording(func() []float64 { return nil })
+			stop := r.Recording(func() []float64 { return nil }, "")
 			stop()
 
 			if strings.Contains(buf.String(), "\x1b") {

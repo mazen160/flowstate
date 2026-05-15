@@ -115,11 +115,16 @@ func (r *Reporter) colorize(code, s string) string {
 	return code + s + ansiReset
 }
 
-// Recording starts the recording status line. When the writer is a TTY,
-// it kicks off a redraw loop that polls levelFn every ~80ms and renders a
-// "● Recording — press Enter to stop  ▂▃▅▆▅▃▁" line in place using
-// \r-based redraws. When the writer is not a TTY, it prints a single
-// static line and returns a no-op stop function.
+// Recording starts the recording status line with a configurable hint. When
+// the writer is a TTY, it kicks off a redraw loop that polls levelFn every
+// ~80ms and renders a "● Recording — <hint>  ▂▃▅▆▅▃▁" line in place using
+// \r-based redraws. When the writer is not a TTY, it prints a single static
+// line and returns a no-op stop function.
+//
+// The hint argument controls the user-facing copy after the em dash. Pass
+// "" to fall back to the default "press Enter to stop". Callers with a
+// max-time deadline typically pass something like "auto-stop in 5s (or
+// press Enter)".
 //
 // The returned stop function:
 //   - is safe to call exactly once or multiple times (guarded by sync.Once);
@@ -128,12 +133,16 @@ func (r *Reporter) colorize(code, s string) string {
 //     the draw goroutine to acknowledge before clearing the line);
 //   - on the interactive path, clears the meter line and writes a final
 //     newline so subsequent Step/Done output starts on a fresh row.
-func (r *Reporter) Recording(levelFn func() []float64) (stop func()) {
+func (r *Reporter) Recording(levelFn func() []float64, hint string) (stop func()) {
+	if hint == "" {
+		hint = "press Enter to stop"
+	}
+
 	if !r.tty {
 		// Non-interactive: one static line, no redraw goroutine. The
-		// "press Enter" copy matches the pre-Reporter behavior so users
-		// piping flowstate into a file see the familiar prompt.
-		fmt.Fprint(r.w, "Recording — press Enter to stop\n")
+		// static copy uses the same hint so users piping flowstate into
+		// a file still see the intended user-facing copy.
+		fmt.Fprintf(r.w, "Recording — %s\n", hint)
 		return func() {}
 	}
 
@@ -141,7 +150,7 @@ func (r *Reporter) Recording(levelFn func() []float64) (stop func()) {
 	doneCh := make(chan struct{})
 	var once sync.Once
 
-	go r.drawRecordingLoop(levelFn, stopCh, doneCh)
+	go r.drawRecordingLoop(levelFn, hint, stopCh, doneCh)
 
 	return func() {
 		once.Do(func() {
@@ -159,7 +168,7 @@ func (r *Reporter) Recording(levelFn func() []float64) (stop func()) {
 // recording status line on each tick. Exits cleanly on stopCh close,
 // signaling completion via doneCh so the stop function can wait for the
 // last frame to flush before clearing the line.
-func (r *Reporter) drawRecordingLoop(levelFn func() []float64, stopCh, doneCh chan struct{}) {
+func (r *Reporter) drawRecordingLoop(levelFn func() []float64, hint string, stopCh, doneCh chan struct{}) {
 	defer close(doneCh)
 
 	ticker := time.NewTicker(80 * time.Millisecond)
@@ -168,14 +177,14 @@ func (r *Reporter) drawRecordingLoop(levelFn func() []float64, stopCh, doneCh ch
 	// Draw an immediate first frame so the prompt appears without waiting
 	// for the first tick. Especially important for very short recordings
 	// where the user might Stop before any tick fires.
-	r.drawRecordingFrame(levelFn)
+	r.drawRecordingFrame(levelFn, hint)
 
 	for {
 		select {
 		case <-stopCh:
 			return
 		case <-ticker.C:
-			r.drawRecordingFrame(levelFn)
+			r.drawRecordingFrame(levelFn, hint)
 		}
 	}
 }
@@ -183,7 +192,7 @@ func (r *Reporter) drawRecordingLoop(levelFn func() []float64, stopCh, doneCh ch
 // drawRecordingFrame renders one frame of the recording meter to the
 // underlying writer. The frame is prefixed with ansiClearLine so each
 // repaint starts from a known-clean line.
-func (r *Reporter) drawRecordingFrame(levelFn func() []float64) {
+func (r *Reporter) drawRecordingFrame(levelFn func() []float64, hint string) {
 	var levels []float64
 	if levelFn != nil {
 		levels = levelFn()
@@ -191,11 +200,11 @@ func (r *Reporter) drawRecordingFrame(levelFn func() []float64) {
 	bar := meterBar(levels)
 
 	dot := r.colorize(ansiRed, "●")
-	hint := r.colorize(ansiCyan, "press Enter to stop")
+	hintStyled := r.colorize(ansiCyan, hint)
 	// The em dash here is intentional — matches the static non-TTY
-	// "Recording — press Enter to stop" form so users get a consistent
-	// look across modes.
-	fmt.Fprintf(r.w, "%s%s Recording — %s  %s", ansiClearLine, dot, hint, bar)
+	// "Recording — <hint>" form so users get a consistent look across
+	// modes.
+	fmt.Fprintf(r.w, "%s%s Recording — %s  %s", ansiClearLine, dot, hintStyled, bar)
 }
 
 // meterBar renders a 7-glyph audio level meter from levels. Missing slots

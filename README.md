@@ -134,6 +134,7 @@ naming both env vars if neither is set.
 | `active_prompt`          | `"default"`                                | Which key under `[prompts]` to use as the system prompt for cleanup.                 |
 | `custom_vocabulary`      | `""`                                       | Comma/newline/semicolon-separated terms preserved as high-priority spellings during cleanup. Multiline TOML strings are supported. |
 | `colors`                 | `"auto"`                                   | Status-line colors: `"auto"` (TTY-detect), `"always"` (force on), `"never"` (force off). `--no-color` and `NO_COLOR=1` also disable. |
+| `max_time_seconds`       | `0`                                        | Auto-stop recording after N seconds and process normally (exit 0). `0` disables (manual stop only). Override with `--max-time <seconds>`. |
 | `[prompts]`              | three embedded prompts                     | Table of named cleanup prompts. See **Prompts** below.                               |
 
 This table is a quick reference. The exhaustive spec, including validation

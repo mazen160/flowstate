@@ -634,3 +634,36 @@ func validBaseConfig() Config {
 	}
 	return c
 }
+
+// TestDefaults_MaxTimeSeconds pins the documented default: 0 (disabled).
+// A non-zero default would silently auto-stop recordings for users who
+// haven't opted into a max-time, which would be surprising.
+func TestDefaults_MaxTimeSeconds(t *testing.T) {
+	if got := Defaults().MaxTimeSeconds; got != 0 {
+		t.Errorf("Defaults().MaxTimeSeconds = %d; want 0", got)
+	}
+}
+
+// TestValidate_MaxTimeSeconds_Negative rejects negative values. Zero is
+// the disabled sentinel; positives are honored as a duration in seconds.
+func TestValidate_MaxTimeSeconds(t *testing.T) {
+	cases := []struct {
+		max     int
+		wantErr bool
+	}{
+		{0, false},  // disabled
+		{5, false},  // typical
+		{600, false}, // 10 minutes — arbitrary upper-realm sanity
+		{-1, true},  // negative is meaningless
+		{-300, true},
+	}
+	for _, tc := range cases {
+		c := validBaseConfig()
+		c.MaxTimeSeconds = tc.max
+		err := c.Validate()
+		gotErr := err != nil
+		if gotErr != tc.wantErr {
+			t.Errorf("Validate(MaxTimeSeconds=%d) err = %v; wantErr = %v", tc.max, err, tc.wantErr)
+		}
+	}
+}

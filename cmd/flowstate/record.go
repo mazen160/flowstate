@@ -253,6 +253,28 @@ func runCapture(
 	stdin io.Reader,
 	stderr io.Writer,
 ) (string, error) {
+	// Derive an effective context. When max_time_seconds > 0, layer a
+	// timeout on top of the caller's ctx. The timer becomes a clean stop
+	// signal, NOT an error: when the trigger returns DeadlineExceeded and
+	// we set the timeout ourselves, we still process the recording as
+	// usual (transcribe → cleanup → output → exit 0).
+	effCtx := ctx
+	cancel := context.CancelFunc(func() {})
+	if cfg.MaxTimeSeconds > 0 {
+		effCtx, cancel = context.WithTimeout(ctx, time.Duration(cfg.MaxTimeSeconds)*time.Second)
+	}
+	defer cancel()
+	timedAutoStop := func(err error) bool {
+		return cfg.MaxTimeSeconds > 0 && errors.Is(err, context.DeadlineExceeded)
+	}
+	// User-facing hint for the recording prompt. "" lets the reporter use
+	// its default "press Enter to stop"; with a deadline we substitute a
+	// duration-aware message.
+	hint := ""
+	if cfg.MaxTimeSeconds > 0 {
+		hint = fmt.Sprintf("auto-stop in %ds (or press Enter)", cfg.MaxTimeSeconds)
+	}
+
 	switch cfg.Trigger {
 	case "enter":
 		// Recording must start first so the user's "Recording…" prompt
@@ -263,13 +285,13 @@ func runCapture(
 		// Kick off the meter (or print the static prompt when stderr is
 		// not a TTY). stop must run before any subsequent reporter
 		// output so the meter line is cleared cleanly.
-		stop := reporter.Recording(recorder.PeakHistory)
+		stop := reporter.Recording(recorder.PeakHistory, hint)
 		// EnterTrigger's stdout writer is io.Discard here because the
 		// reporter already printed the prompt. We pass a sentinel
 		// io.Writer that swallows the trigger's own write so we don't
 		// double-print "Recording…".
 		t := trigger.NewEnterTrigger(stdin, io.Discard, "")
-		if err := t.Run(ctx, nil); err != nil {
+		if err := t.Run(effCtx, nil); err != nil && !timedAutoStop(err) {
 			stop()
 			// Best-effort stop on cancel so the temp WAV is at least
 			// flushed before we surface the cancellation error.
@@ -293,14 +315,18 @@ func runCapture(
 		// pipeline error. We print a static one-liner on key-down via
 		// reporter.Step so the user sees that capture is live, and
 		// stop is a no-op on the non-meter PTT path.
+		ptHint := "Recording — release key to stop"
+		if cfg.MaxTimeSeconds > 0 {
+			ptHint = fmt.Sprintf("Recording — auto-stop in %ds (or release key)", cfg.MaxTimeSeconds)
+		}
 		onStart := func() error {
 			if err := recorder.Start(); err != nil {
 				return err
 			}
-			reporter.Step("Recording — release key to stop")
+			reporter.Step(ptHint)
 			return nil
 		}
-		if err := t.Run(ctx, onStart); err != nil {
+		if err := t.Run(effCtx, onStart); err != nil && !timedAutoStop(err) {
 			_, _ = recorder.Stop()
 			_ = t.Close()
 			return "", fmt.Errorf("trigger: %w", err)

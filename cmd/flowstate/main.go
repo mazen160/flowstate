@@ -49,6 +49,8 @@ Record flags:
   --model <name>           Override cleanup_model.
   --no-color               Disable ANSI colors on stderr (same as NO_COLOR=1
                            or colors = "never" in config).
+  --max-time <seconds>     Auto-stop recording after N seconds and process
+                           normally (exit 0). 0 = disabled (default).
 `
 
 func main() {

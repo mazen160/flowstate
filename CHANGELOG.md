@@ -6,6 +6,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- `--max-time <seconds>` flag + `max_time_seconds` config field. When > 0,
+  recording auto-stops after the given duration and processes normally
+  (exit 0). The recording prompt updates to `auto-stop in Ns (or press
+  Enter)` so the user sees the deadline. Default 0 (disabled). Users can
+  still stop early; first signal wins.
+
 ### Fixed
 - `--device <uid>` no longer panics with `cgo argument has Go pointer to
   unpinned Go pointer` on Go 1.21+. The DeviceID is now pinned via

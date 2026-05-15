@@ -21,7 +21,7 @@ func TestReporter_NoANSIWhenWriterIsBuffer(t *testing.T) {
 	r.Warning("mute failed: %v", "permission denied")
 	r.Error("transcribe: %v", "boom")
 	// Recording on a non-TTY prints one static line; assert below.
-	stop := r.Recording(func() []float64 { return nil })
+	stop := r.Recording(func() []float64 { return nil }, "")
 	stop()
 
 	out := buf.String()
@@ -165,8 +165,38 @@ func TestFormatDuration_Forms(t *testing.T) {
 func TestReporter_RecordingStop_Idempotent(t *testing.T) {
 	var buf bytes.Buffer
 	r := NewReporter(&buf, ColorNever)
-	stop := r.Recording(nil)
+	stop := r.Recording(nil, "")
 	stop()
 	stop()
 	stop()
+}
+
+// TestReporter_Recording_HintOverridesDefault verifies that a non-empty
+// hint replaces the default "press Enter to stop" copy on the non-TTY
+// path.
+func TestReporter_Recording_HintOverridesDefault(t *testing.T) {
+	var buf bytes.Buffer
+	r := NewReporter(&buf, ColorNever)
+	stop := r.Recording(nil, "auto-stop in 5s (or press Enter)")
+	stop()
+	out := buf.String()
+	if !strings.Contains(out, "auto-stop in 5s") {
+		t.Fatalf("expected custom hint in output, got: %q", out)
+	}
+	if strings.Contains(out, "press Enter to stop") {
+		t.Fatalf("default hint should not appear when custom hint is set, got: %q", out)
+	}
+}
+
+// TestReporter_Recording_EmptyHintFallsBack verifies that passing "" for
+// hint reproduces the documented default "press Enter to stop" copy.
+func TestReporter_Recording_EmptyHintFallsBack(t *testing.T) {
+	var buf bytes.Buffer
+	r := NewReporter(&buf, ColorNever)
+	stop := r.Recording(nil, "")
+	stop()
+	out := buf.String()
+	if !strings.Contains(out, "press Enter to stop") {
+		t.Fatalf("expected default hint, got: %q", out)
+	}
 }
