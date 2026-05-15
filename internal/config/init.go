@@ -75,6 +75,15 @@ active_prompt = "default"
 custom_vocabulary = """
 """
 
+# Terminal colors for the recording prompt and status lines.
+#   "auto"   → emit ANSI colors only when stderr is a TTY and NO_COLOR is
+#              unset. This is the documented default and is safe for piping.
+#   "always" → force ANSI colors on (use this inside multiplexers that don't
+#              propagate the TTY mode bit).
+#   "never"  → suppress ANSI colors entirely. Equivalent to passing
+#              --no-color on the command line or setting NO_COLOR=1.
+colors = "auto"
+
 [prompts]
 # default — full FreeFlow-style cleanup with self-correction, formatting,
 # and developer-syntax handling. See README for the long version.

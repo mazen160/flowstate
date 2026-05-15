@@ -21,6 +21,7 @@ type recordFlags struct {
 	pttKey     string
 	model      string
 	noMute     bool
+	noColor    bool
 
 	// set is populated from fs.Visit so applyFlags can distinguish unset
 	// from explicit-empty. Keys are the long flag names (without the
@@ -45,6 +46,7 @@ func newRecordFlagSet(stderr io.Writer) (*flag.FlagSet, *recordFlags) {
 	fs.StringVar(&rf.trigger, "trigger", "", "Override trigger (\"enter\" or \"push-to-talk\").")
 	fs.StringVar(&rf.pttKey, "ptt-key", "", "Override ptt_key (push-to-talk mode only).")
 	fs.StringVar(&rf.model, "model", "", "Override cleanup_model.")
+	fs.BoolVar(&rf.noColor, "no-color", false, "Disable ANSI colors in status output (equivalent to colors=\"never\").")
 
 	return fs, rf
 }

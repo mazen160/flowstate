@@ -34,6 +34,7 @@ type Config struct {
 	PreserveClipboardAfterPaste bool              `toml:"preserve_clipboard_after_paste"`
 	ActivePrompt                string            `toml:"active_prompt"`
 	CustomVocabulary            string            `toml:"custom_vocabulary"`
+	Colors                      string            `toml:"colors"`
 	Prompts                     map[string]string `toml:"prompts"`
 
 	// warnings is populated during Load for soft issues (e.g. unrecognized
@@ -60,6 +61,7 @@ func Defaults() Config {
 		PreserveClipboardAfterPaste: true,
 		ActivePrompt:                "default",
 		CustomVocabulary:            "",
+		Colors:                      "auto",
 	}
 }
 
@@ -76,6 +78,15 @@ var validOutputModes = map[string]struct{}{
 	"stdout":    {},
 	"clipboard": {},
 	"paste":     {},
+}
+
+// validColorModes enumerates the allowed values for [Config.Colors]. The
+// empty string is also accepted at validate time and treated as "auto" —
+// existing configs that predate this field load without a forced rewrite.
+var validColorModes = map[string]struct{}{
+	"auto":   {},
+	"always": {},
+	"never":  {},
 }
 
 // Validate checks that the parsed Config is internally consistent. It does
@@ -97,6 +108,16 @@ func (c *Config) Validate() error {
 	}
 	if _, ok := c.Prompts[c.ActivePrompt]; !ok {
 		return fmt.Errorf("active_prompt %q does not match any key under [prompts]", c.ActivePrompt)
+	}
+
+	// The empty string is tolerated — an existing config that predates
+	// the colors field shouldn't suddenly fail Validate. The runtime
+	// resolver in cmd/flowstate treats "" the same as "auto".
+	if c.Colors != "" {
+		if _, ok := validColorModes[c.Colors]; !ok {
+			return fmt.Errorf("invalid colors %q: must be one of %s",
+				c.Colors, joinKeys(validColorModes))
+		}
 	}
 
 	return nil

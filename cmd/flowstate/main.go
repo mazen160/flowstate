@@ -47,6 +47,8 @@ Record flags:
   --trigger <mode>         "enter" or "push-to-talk".
   --ptt-key <name>         Override ptt_key (push-to-talk only).
   --model <name>           Override cleanup_model.
+  --no-color               Disable ANSI colors on stderr (same as NO_COLOR=1
+                           or colors = "never" in config).
 `
 
 func main() {

@@ -133,6 +133,7 @@ naming both env vars if neither is set.
 | `preserve_clipboard_after_paste` | `true`                              | When `paste` is enabled, snapshot the current clipboard before pasting and restore it ~500ms later, unless you copied something else in the meantime. |
 | `active_prompt`          | `"default"`                                | Which key under `[prompts]` to use as the system prompt for cleanup.                 |
 | `custom_vocabulary`      | `""`                                       | Comma/newline/semicolon-separated terms preserved as high-priority spellings during cleanup. Multiline TOML strings are supported. |
+| `colors`                 | `"auto"`                                   | Status-line colors: `"auto"` (TTY-detect), `"always"` (force on), `"never"` (force off). `--no-color` and `NO_COLOR=1` also disable. |
 | `[prompts]`              | three embedded prompts                     | Table of named cleanup prompts. See **Prompts** below.                               |
 
 This table is a quick reference. The exhaustive spec, including validation
@@ -161,6 +162,40 @@ has focus), which requires extra permissions:
 - **Linux** — usually works out of the box on X11; Wayland support depends
   on the compositor.
 - **Windows** — works out of the box.
+
+## Status output
+
+While a recording is in flight, flowstate prints staged status lines to
+**stderr**:
+
+- A `● Recording — press Enter to stop` prompt with a small live audio-level
+  meter while you speak.
+- `● Transcribing…` once the upload starts.
+- `● Cleaning up…` while the LLM rewrite runs.
+- `✓ Done. (N characters, 2.3s)` at the end.
+
+Errors and soft warnings (mute failure, "no speech detected", config typos)
+also go to stderr, prefixed with `✗` or `⚠`. **Nothing other than the
+cleaned transcript is ever written to stdout**, so `flowstate | jq` and
+similar pipelines stay clean.
+
+Colors are emitted when stderr is a TTY. To disable them — for log capture,
+CI runs, or terminals that don't render ANSI — use any of:
+
+- The `--no-color` flag (highest priority).
+- The `NO_COLOR=1` environment variable (per the [no-color.org](https://no-color.org)
+  convention).
+- `colors = "never"` in the config file.
+
+To force colors on (e.g. inside a multiplexer that doesn't propagate the
+TTY mode bit), set `colors = "always"` in the config. The default,
+`colors = "auto"`, picks the right behavior based on whether stderr is a
+TTY.
+
+The audio-level meter is only rendered on the interactive (TTY) path. When
+stderr is redirected, flowstate falls back to a single static
+`Recording — press Enter to stop` line so log files don't fill up with
+in-place redraws.
 
 ## Output modes
 
@@ -221,6 +256,8 @@ Top-level flags during recording:
 - `--trigger <mode>` — override `trigger`.
 - `--ptt-key <name>` — override `ptt_key`.
 - `--model <name>` — override `cleanup_model`.
+- `--no-color` — disable ANSI colors in status output (equivalent to
+  `colors = "never"` in config or `NO_COLOR=1` in env).
 
 Flags are sticky for the current invocation only; they never rewrite the
 config file.

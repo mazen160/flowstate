@@ -23,6 +23,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `custom_vocabulary` config field — comma/newline/semicolon-separated
   list of high-priority terms appended to the cleanup system prompt so
   domain spellings survive the LLM rewrite. Default `""`.
+- `colors` config field and `--no-color` flag — control ANSI colors in the
+  staged status output. Values: `"auto"` (default; TTY-detect), `"always"`,
+  `"never"`. The `NO_COLOR` environment variable is also honored per the
+  no-color.org convention.
 
 ### Breaking
 - API key is now read from the `GROQ_API_KEY` environment variable
@@ -35,6 +39,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `language` now defaults to `"en"` (English) instead of `""` (auto-detect).
   Auto-detect is still available — set `language = ""` explicitly to opt back
   in. Single-language users get faster, more accurate transcription by default.
+- Recording prompt now shows a live audio-level meter and uses subtle
+  colors when stderr is a TTY. Staged status lines (`● Transcribing…`,
+  `● Cleaning up…`, `✓ Done.`) replace the previous plain
+  `Recording…` / `Done.` prints.
+- All status messages (including warnings and errors) are confirmed routed
+  to stderr; stdout only ever receives the cleaned transcript so
+  `flowstate | jq` and similar pipelines stay clean.
+- Disable colors with `--no-color`, `NO_COLOR=1`, or `colors = "never"` in
+  the config. Force on with `colors = "always"`. Default is `"auto"`.
 
 ## [0.1.0] — TBD
 ### Added

@@ -503,6 +503,102 @@ default = "x"
 	}
 }
 
+// TestDefaults_Colors pins the documented default for the colors field. A
+// fresh config produced by Defaults() should opt into "auto" so a brand-new
+// user gets colors on TTY without explicit configuration.
+func TestDefaults_Colors(t *testing.T) {
+	if got := Defaults().Colors; got != "auto" {
+		t.Errorf("Defaults().Colors = %q; want %q", got, "auto")
+	}
+}
+
+// TestValidate_Colors covers the small enum, including the empty-string
+// tolerance: an existing config written before TASK-135 (and so missing
+// the key entirely) must still pass Validate.
+func TestValidate_Colors(t *testing.T) {
+	cases := []struct {
+		colors  string
+		wantErr bool
+	}{
+		{"auto", false},
+		{"always", false},
+		{"never", false},
+		{"", false},        // legacy configs: empty → treated as auto at runtime.
+		{"AUTO", true},     // case-sensitive.
+		{"sometimes", true},
+		{"on", true},
+	}
+	for _, tc := range cases {
+		tc := tc
+		t.Run(tc.colors, func(t *testing.T) {
+			cfg := validBaseConfig()
+			cfg.Colors = tc.colors
+			err := cfg.Validate()
+			if tc.wantErr && err == nil {
+				t.Errorf("Colors=%q: want error, got nil", tc.colors)
+			}
+			if !tc.wantErr && err != nil {
+				t.Errorf("Colors=%q: unexpected error: %v", tc.colors, err)
+			}
+		})
+	}
+}
+
+// TestInit_WritesColorsField verifies the init template surfaces the
+// colors key so users can find and edit it in the generated file.
+func TestInit_WritesColorsField(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "config.toml")
+	if err := Init(path, false); err != nil {
+		t.Fatalf("Init: %v", err)
+	}
+	body, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("read: %v", err)
+	}
+	if !strings.Contains(string(body), "colors") {
+		t.Errorf("rendered config missing colors key")
+	}
+	if !strings.Contains(string(body), `colors = "auto"`) {
+		t.Errorf("rendered config should default colors to \"auto\"; body:\n%s", body)
+	}
+}
+
+// TestLoad_RoundtripsColors verifies Load reads the colors field back from
+// disk and that all three documented values survive the roundtrip.
+func TestLoad_RoundtripsColors(t *testing.T) {
+	for _, mode := range []string{"auto", "always", "never"} {
+		mode := mode
+		t.Run(mode, func(t *testing.T) {
+			path := filepath.Join(t.TempDir(), "config.toml")
+			body := `
+trigger = "enter"
+ptt_key = "space"
+base_url = "https://api.groq.com/openai/v1"
+transcription_model = "whisper-large-v3"
+cleanup_model = "openai/gpt-oss-20b"
+cleanup_fallback_model = "meta-llama/llama-4-scout-17b-16e-instruct"
+output_mode = "stdout"
+mute_while_recording = true
+active_prompt = "default"
+colors = "` + mode + `"
+
+[prompts]
+default = "x"
+`
+			if err := os.WriteFile(path, []byte(body), 0o600); err != nil {
+				t.Fatalf("write: %v", err)
+			}
+			cfg, err := Load(path)
+			if err != nil {
+				t.Fatalf("Load: %v", err)
+			}
+			if cfg.Colors != mode {
+				t.Errorf("Colors = %q; want %q", cfg.Colors, mode)
+			}
+		})
+	}
+}
+
 // TestResolveAPIKey_WhitespaceOnly_ReturnsError makes sure that an env var
 // set to whitespace doesn't accidentally pass as a valid key (which would
 // lead to a useless 401 from Groq later in the pipeline).
