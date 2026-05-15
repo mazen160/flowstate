@@ -679,13 +679,27 @@ PRs welcome. See [CONTRIBUTING.md](CONTRIBUTING.md) for the dev environment, bui
 
 If you're using flowstate in your daily workflow, share what you built in [Discussions → Show & Tell](https://github.com/mazen160/flowstate/discussions/categories/show-and-tell). Workflow tips and config snippets help everyone.
 
-## License
-
-MIT, see [LICENSE](LICENSE).
-
 ## Credits
 
 Inspired by [FreeFlow](https://github.com/zachlatta/freeflow) (Swift, macOS) by Zach Latta, which provides the wire-level reference for the Groq pipeline, and by [Wispr Flow](https://wisprflow.ai), which set the bar for what voice-driven dictation should feel like.
+
+---
+
+## License
+
+The project is currently licensed under [MIT License](LICENSE).
+
+---
+
+## Author
+
+**Mazin Ahmed**
+
+- Website: [https://mazinahmed.net](https://mazinahmed.net)
+- Email: mazin [at] mazinahmed [dot] net
+- Twitter: [https://twitter.com/mazen160](https://twitter.com/mazen160)
+- LinkedIn: [http://linkedin.com/in/infosecmazinahmed](http://linkedin.com/in/infosecmazinahmed)
+- GitHub: [https://github.com/mazen160](https://github.com/mazen160)
 
 <div align="center">
   <br/>
