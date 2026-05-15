@@ -501,33 +501,44 @@
     return tag === 'INPUT' || tag === 'TEXTAREA' || el.isContentEditable;
   }
 
-  function isPTTKey(ev) {
+  function isToggleKey(ev) {
     return ev.key === 'Enter' || ev.key === 'End' || ev.code === 'Space' || ev.key === ' ';
   }
 
+  // toggleRecording flips recording state. Idle → start; recording → stop.
+  // Uploading is a no-op so a stray click during the network round trip
+  // doesn't kick off a second capture before the first response lands.
+  function toggleRecording() {
+    if (REC.state === 'recording') {
+      stopRecording();
+    } else if (REC.state === 'idle' || !REC.state) {
+      startRecording();
+    }
+  }
+
   function bindKeys() {
+    // Click-to-toggle: one keydown starts, the next stops. We listen on
+    // keydown only (no keyup) so holding the key doesn't accidentally
+    // toggle off when released. ev.repeat is filtered so a user holding
+    // the key down doesn't spam toggles.
     window.addEventListener('keydown', function (ev) {
       if (ev.repeat) return;
       if (isTextTarget(document.activeElement)) return;
-      if (!isPTTKey(ev)) return;
+      if (!isToggleKey(ev)) return;
       ev.preventDefault();
-      startRecording();
-    });
-    window.addEventListener('keyup', function (ev) {
-      if (isTextTarget(document.activeElement)) return;
-      if (!isPTTKey(ev)) return;
-      ev.preventDefault();
-      stopRecording();
+      toggleRecording();
     });
   }
 
   function bindPointer() {
     var btn = $('rec');
-    btn.addEventListener('pointerdown', function (ev) { ev.preventDefault(); startRecording(); });
-    btn.addEventListener('pointerup',     function (ev) { ev.preventDefault(); stopRecording(); });
-    btn.addEventListener('pointercancel', function ()   { stopRecording(); });
-    btn.addEventListener('pointerleave',  function ()   {
-      if (REC.state === 'recording') stopRecording();
+    // Use 'click' (not pointerdown/up) so the native button semantics
+    // are preserved: Space/Enter while the button is focused still fires
+    // the click via the browser's default activation behavior, and a
+    // stray pointerdown that doesn't land in a release won't toggle.
+    btn.addEventListener('click', function (ev) {
+      ev.preventDefault();
+      toggleRecording();
     });
   }
 
@@ -554,6 +565,27 @@
       persist();
       rerender();
     });
+    // Clear-local-data button. Confirms first since this wipes every
+    // session, transcript, and the saved token. After clearing we reload
+    // the page so the in-memory state restarts cleanly without us having
+    // to reset every UI surface manually.
+    var clearBtn = $('clear-storage');
+    if (clearBtn) {
+      clearBtn.addEventListener('click', function () {
+        var ok = window.confirm(
+          'Clear all local data?\n\n' +
+          'This wipes every session, transcript, and the saved API token ' +
+          'from this browser. The server is untouched. This cannot be undone.'
+        );
+        if (!ok) return;
+        try {
+          localStorage.removeItem('flowstate.sessions');
+          localStorage.removeItem('flowstate.currentSessionId');
+          localStorage.removeItem('flowstate.token');
+        } catch (e) { /* ignore quota / disabled storage errors */ }
+        location.reload();
+      });
+    }
     // Result-card raw toggle is static markup; per-item toggles are wired
     // in renderHistory() since they're recreated on every render.
     var resultToggle = $('result-raw-toggle');

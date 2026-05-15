@@ -43,7 +43,7 @@
       <span class="rec-dot" aria-hidden="true"></span>
     </button>
     <p id="rec-hint" class="rec-hint">
-      Hold <kbd>Enter</kbd>, <kbd>End</kbd>, or <kbd>Space</kbd> to record
+      Press <kbd>Enter</kbd>, <kbd>End</kbd>, or <kbd>Space</kbd> to record · press again to stop
     </p>
     <p id="rec-status" class="rec-status" role="status" aria-live="polite"></p>
   </section>
@@ -94,6 +94,16 @@
         <span class="field-label">Switch session</span>
         <select id="session-select"></select>
       </label>
+    </div>
+    <div class="settings-danger">
+      <div class="settings-danger-text">
+        <span class="field-label">Local data</span>
+        <p class="settings-danger-desc">
+          All sessions, transcripts, and the saved API token live in this browser's
+          localStorage. Clearing wipes everything; the server is untouched.
+        </p>
+      </div>
+      <button id="clear-storage" class="btn btn-danger" type="button">Clear local data</button>
     </div>
     <p id="version-line" class="version-line"></p>
   </div>

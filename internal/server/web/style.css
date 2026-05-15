@@ -521,6 +521,40 @@ kbd {
   color: var(--text-3);
 }
 
+/* Destructive zone in settings: clearing localStorage is a one-way op,
+   so we set it apart with a top divider and a muted-red action. */
+.settings-danger {
+  margin-top: 18px;
+  padding-top: 16px;
+  border-top: 1px solid var(--line);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+.settings-danger-text { flex: 1 1 280px; min-width: 0; }
+.settings-danger-desc {
+  margin: 4px 0 0;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--text-3);
+}
+.btn-danger {
+  color: #d97070;
+  border-color: color-mix(in oklab, #d97070 35%, var(--line-2));
+  background: transparent;
+}
+.btn-danger:hover {
+  color: #ff7e7e;
+  border-color: color-mix(in oklab, #d97070 60%, var(--line-2));
+  background: color-mix(in oklab, #d97070 8%, transparent);
+}
+.btn-danger:focus-visible {
+  outline: 2px solid #d97070;
+  outline-offset: 2px;
+}
+
 /* ────────── responsive ────────── */
 
 @media (max-width: 480px) {
