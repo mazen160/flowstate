@@ -12,6 +12,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   (exit 0). The recording prompt updates to `auto-stop in Ns (or press
   Enter)` so the user sees the deadline. Default 0 (disabled). Users can
   still stop early; first signal wins.
+- `--paste-delay <seconds>` flag + `paste_delay_seconds` config field.
+  When `paste` is in `output_mode` and the delay is > 0, flowstate writes
+  the transcript to the clipboard, prints a `● Pasting in Ns…` status,
+  waits the delay, then fires the paste keystroke. Lets you switch to
+  the destination window before the keystroke lands. The clipboard-
+  restore timer (`preserve_clipboard_after_paste`) starts AFTER the
+  paste fires. Default 0 (immediate).
 
 ### Fixed
 - `--device <uid>` no longer panics with `cgo argument has Go pointer to

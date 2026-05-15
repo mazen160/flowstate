@@ -135,6 +135,7 @@ naming both env vars if neither is set.
 | `custom_vocabulary`      | `""`                                       | Comma/newline/semicolon-separated terms preserved as high-priority spellings during cleanup. Multiline TOML strings are supported. |
 | `colors`                 | `"auto"`                                   | Status-line colors: `"auto"` (TTY-detect), `"always"` (force on), `"never"` (force off). `--no-color` and `NO_COLOR=1` also disable. |
 | `max_time_seconds`       | `0`                                        | Auto-stop recording after N seconds and process normally (exit 0). `0` disables (manual stop only). Override with `--max-time <seconds>`. |
+| `paste_delay_seconds`    | `0`                                        | When `paste` is enabled, wait N seconds between writing the clipboard and firing the paste keystroke. Gives you time to focus the destination window. Override with `--paste-delay <seconds>`. |
 | `[prompts]`              | three embedded prompts                     | Table of named cleanup prompts. See **Prompts** below.                               |
 
 This table is a quick reference. The exhaustive spec, including validation

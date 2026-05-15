@@ -51,6 +51,9 @@ Record flags:
                            or colors = "never" in config).
   --max-time <seconds>     Auto-stop recording after N seconds and process
                            normally (exit 0). 0 = disabled (default).
+  --paste-delay <seconds>  Wait N seconds between clipboard seed and the
+                           paste keystroke. Gives you time to focus the
+                           destination window. 0 = immediate (default).
 `
 
 func main() {

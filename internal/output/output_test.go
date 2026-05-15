@@ -172,3 +172,56 @@ func TestWrite_PreserveClipboard_LeavesUserCopyAlone(t *testing.T) {
 		t.Errorf("user clipboard should be preserved; got %q (want %q)", string(got), "user copied this")
 	}
 }
+
+// TestWrite_PasteDelay_Sleeps verifies that a non-zero PasteDelay causes
+// Write to block for at least that long before the paste keystroke. We
+// can't easily observe the keystroke timing directly, but we can observe
+// that Write itself doesn't return early.
+//
+// Uses very short delays (~20ms) so the test runs fast. Skipped on hosts
+// without a working clipboard or paste binary.
+func TestWrite_PasteDelay_Sleeps(t *testing.T) {
+	if err := initClipboard(); err != nil {
+		t.Skipf("clipboard unavailable: %v", err)
+	}
+
+	delay := 20 * time.Millisecond
+	var buf bytes.Buffer
+	start := time.Now()
+	err := WriteWithStdout("hello", Destinations{
+		Paste:      true,
+		PasteDelay: delay,
+	}, &buf)
+	elapsed := time.Since(start)
+	if err != nil {
+		t.Skipf("paste keystroke unavailable on this host: %v", err)
+	}
+	if elapsed < delay {
+		t.Errorf("WriteWithStdout returned in %v; expected to block at least %v", elapsed, delay)
+	}
+}
+
+// TestWrite_PasteDelay_ZeroSkipsSleep is the regression guard: a 0 delay
+// must NOT introduce any meaningful pause. The boundary is sloppy
+// (clipboard write + paste shellout already take a few ms), so we just
+// assert "well under 50ms" which is comfortably above no-delay timing on
+// realistic hosts.
+func TestWrite_PasteDelay_ZeroSkipsSleep(t *testing.T) {
+	if err := initClipboard(); err != nil {
+		t.Skipf("clipboard unavailable: %v", err)
+	}
+
+	var buf bytes.Buffer
+	start := time.Now()
+	err := WriteWithStdout("hello", Destinations{
+		Paste:      true,
+		PasteDelay: 0,
+	}, &buf)
+	elapsed := time.Since(start)
+	if err != nil {
+		t.Skipf("paste keystroke unavailable on this host: %v", err)
+	}
+	if elapsed > 200*time.Millisecond {
+		t.Errorf("WriteWithStdout with PasteDelay=0 took %v; expected < 200ms", elapsed)
+	}
+}

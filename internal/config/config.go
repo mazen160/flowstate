@@ -36,6 +36,7 @@ type Config struct {
 	CustomVocabulary            string            `toml:"custom_vocabulary"`
 	Colors                      string            `toml:"colors"`
 	MaxTimeSeconds              int               `toml:"max_time_seconds"`
+	PasteDelaySeconds           int               `toml:"paste_delay_seconds"`
 	Prompts                     map[string]string `toml:"prompts"`
 
 	// warnings is populated during Load for soft issues (e.g. unrecognized
@@ -64,6 +65,7 @@ func Defaults() Config {
 		CustomVocabulary:            "",
 		Colors:                      "auto",
 		MaxTimeSeconds:              0,
+		PasteDelaySeconds:           0,
 	}
 }
 
@@ -124,6 +126,10 @@ func (c *Config) Validate() error {
 
 	if c.MaxTimeSeconds < 0 {
 		return fmt.Errorf("invalid max_time_seconds %d: must be >= 0 (0 = disabled)", c.MaxTimeSeconds)
+	}
+
+	if c.PasteDelaySeconds < 0 {
+		return fmt.Errorf("invalid paste_delay_seconds %d: must be >= 0 (0 = no delay)", c.PasteDelaySeconds)
 	}
 
 	return nil

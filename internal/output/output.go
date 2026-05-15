@@ -47,6 +47,14 @@ type Destinations struct {
 	//
 	// No-op when Paste is false.
 	PreservePriorClipboard bool
+
+	// PasteDelay, when > 0 and Paste is also true, inserts a sleep between
+	// the clipboard-seed write and the Cmd+V / Ctrl+V keystroke. Lets the
+	// user switch to the destination window before the paste fires. The
+	// preserve-clipboard restore timer starts AFTER the paste keystroke
+	// (so the total wall-clock time is roughly PasteDelay + restoreDelay).
+	// No-op when Paste is false or PasteDelay <= 0.
+	PasteDelay time.Duration
 }
 
 // clipboardInitOnce guards [clipboard.Init], which is a cgo init and must
@@ -169,36 +177,45 @@ func WriteWithStdout(text string, dests Destinations, stdout io.Writer) error {
 	if dests.Paste {
 		if !clipboardSeeded {
 			// Already reported via firstErr above; skip the keystroke.
-		} else if err := paste.Paste(); err != nil {
-			if firstErr == nil {
-				firstErr = err
+		} else {
+			// Optional pre-paste delay: gives the user time to switch
+			// windows after the clipboard is seeded but before the
+			// Cmd+V/Ctrl+V keystroke fires. Sleep is blocking — Write
+			// is documented as synchronous on the caller's goroutine.
+			if dests.PasteDelay > 0 {
+				time.Sleep(dests.PasteDelay)
 			}
-		} else if dests.PreservePriorClipboard && priorClipboardValid {
-			// Paste keystroke fired successfully; schedule a
-			// best-effort restore of the prior clipboard. The
-			// goroutine is fire-and-forget so callers don't have to
-			// wait restoreDelay before continuing. Tests sync via
-			// clipboardRestoreWG.
-			clipboardRestoreWG.Add(1)
-			go func(prior []byte, transcript []byte) {
-				defer clipboardRestoreWG.Done()
-				time.Sleep(restoreDelay)
-				// Bail if reading the clipboard fails for any
-				// reason — we never want to panic the host process
-				// from a background goroutine.
-				current := clipboard.Read(clipboard.FmtText)
-				if current == nil {
-					fmt.Fprintln(os.Stderr, "warning: clipboard restore skipped (read failed)")
-					return
+			if err := paste.Paste(); err != nil {
+				if firstErr == nil {
+					firstErr = err
 				}
-				// Only restore if the clipboard still holds the
-				// transcript we just set. If the user copied
-				// something else, leave that fresh copy alone.
-				if !bytes.Equal(current, transcript) {
-					return
-				}
-				clipboard.Write(clipboard.FmtText, prior)
-			}(priorClipboard, []byte(text))
+			} else if dests.PreservePriorClipboard && priorClipboardValid {
+				// Paste keystroke fired successfully; schedule a
+				// best-effort restore of the prior clipboard. The
+				// goroutine is fire-and-forget so callers don't have to
+				// wait restoreDelay before continuing. Tests sync via
+				// clipboardRestoreWG.
+				clipboardRestoreWG.Add(1)
+				go func(prior []byte, transcript []byte) {
+					defer clipboardRestoreWG.Done()
+					time.Sleep(restoreDelay)
+					// Bail if reading the clipboard fails for any
+					// reason — we never want to panic the host process
+					// from a background goroutine.
+					current := clipboard.Read(clipboard.FmtText)
+					if current == nil {
+						fmt.Fprintln(os.Stderr, "warning: clipboard restore skipped (read failed)")
+						return
+					}
+					// Only restore if the clipboard still holds the
+					// transcript we just set. If the user copied
+					// something else, leave that fresh copy alone.
+					if !bytes.Equal(current, transcript) {
+						return
+					}
+					clipboard.Write(clipboard.FmtText, prior)
+				}(priorClipboard, []byte(text))
+			}
 		}
 	}
 

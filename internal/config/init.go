@@ -92,6 +92,15 @@ colors = "auto"
 # Override per-invocation with --max-time <seconds>.
 max_time_seconds = 0
 
+# Delay (in seconds) between writing the transcript to the clipboard and
+# firing the paste keystroke. 0 = paste immediately (current behavior).
+# When > 0 AND output_mode contains "paste", flowstate copies the transcript
+# to the clipboard, waits this long, then sends the paste shortcut — gives
+# you time to switch to the destination window. The clipboard-restore timer
+# (preserve_clipboard_after_paste) starts AFTER the paste fires.
+# Override per-invocation with --paste-delay <seconds>.
+paste_delay_seconds = 0
+
 [prompts]
 # default — full FreeFlow-style cleanup with self-correction, formatting,
 # and developer-syntax handling. See README for the long version.

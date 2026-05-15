@@ -667,3 +667,35 @@ func TestValidate_MaxTimeSeconds(t *testing.T) {
 		}
 	}
 }
+
+// TestDefaults_PasteDelaySeconds pins the documented default: 0 (no delay).
+// A non-zero default would silently pause paste output for users who
+// didn't opt in.
+func TestDefaults_PasteDelaySeconds(t *testing.T) {
+	if got := Defaults().PasteDelaySeconds; got != 0 {
+		t.Errorf("Defaults().PasteDelaySeconds = %d; want 0", got)
+	}
+}
+
+// TestValidate_PasteDelaySeconds rejects negatives. Zero = no delay;
+// positives stretch the gap between clipboard write and paste keystroke.
+func TestValidate_PasteDelaySeconds(t *testing.T) {
+	cases := []struct {
+		delay   int
+		wantErr bool
+	}{
+		{0, false},
+		{1, false},
+		{30, false},
+		{-1, true},
+	}
+	for _, tc := range cases {
+		c := validBaseConfig()
+		c.PasteDelaySeconds = tc.delay
+		err := c.Validate()
+		gotErr := err != nil
+		if gotErr != tc.wantErr {
+			t.Errorf("Validate(PasteDelaySeconds=%d) err = %v; wantErr = %v", tc.delay, err, tc.wantErr)
+		}
+	}
+}

@@ -218,6 +218,13 @@ func runRecord(ctx context.Context, args []string, stdin io.Reader, stdout, stde
 		Clipboard:              clipboardOn,
 		Paste:                  pasteOn,
 		PreservePriorClipboard: cfg.PreserveClipboardAfterPaste,
+		PasteDelay:             time.Duration(cfg.PasteDelaySeconds) * time.Second,
+	}
+	// Tell the user we're about to wait so they can refocus before the
+	// keystroke fires. Only shown when both Paste is enabled and a delay
+	// is configured — silent on the immediate-paste path.
+	if pasteOn && cfg.PasteDelaySeconds > 0 {
+		reporter.Step(fmt.Sprintf("Pasting in %ds — switch to destination window", cfg.PasteDelaySeconds))
 	}
 	if err := output.WriteWithStdout(cleaned, dests, stdout); err != nil {
 		reporter.Error("output: %v", err)

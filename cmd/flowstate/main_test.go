@@ -143,6 +143,27 @@ func TestApplyFlags_MaxTimeUnset(t *testing.T) {
 	}
 }
 
+// TestApplyFlags_PasteDelay wires --paste-delay=3 through to
+// PasteDelaySeconds. Behavior of the delay itself (sleeping before the
+// paste keystroke) is verified at the output-package level.
+func TestApplyFlags_PasteDelay(t *testing.T) {
+	cfg := config.Defaults()
+	if cfg.PasteDelaySeconds != 0 {
+		t.Fatalf("default PasteDelaySeconds = %d, want 0", cfg.PasteDelaySeconds)
+	}
+
+	fs, rf := newRecordFlagSet(&bytes.Buffer{})
+	if err := fs.Parse([]string{"--paste-delay=3"}); err != nil {
+		t.Fatalf("parse: %v", err)
+	}
+	rf.captureSetFlags(fs)
+	applyFlags(&cfg, rf)
+
+	if cfg.PasteDelaySeconds != 3 {
+		t.Fatalf("PasteDelaySeconds = %d, want 3", cfg.PasteDelaySeconds)
+	}
+}
+
 // TestResolveColorMode_Precedence pins the documented precedence ladder.
 // The whole point of this helper is that command-line and env overrides win
 // over config, and that NO_COLOR=1 acts as a kill-switch even when the
