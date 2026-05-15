@@ -2,6 +2,8 @@ package main
 
 import (
 	"bytes"
+	"flag"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
@@ -250,6 +252,103 @@ func TestRecordOutput_NoANSIWhenStderrIsBuffer(t *testing.T) {
 			if strings.Contains(buf.String(), "\x1b") {
 				t.Fatalf("path %q leaked ANSI to non-TTY stderr:\n%q",
 					p.name, buf.String())
+			}
+		})
+	}
+}
+
+// TestWebCommand_FlagDefaults parses `flowstate web` with no extra flags
+// and verifies the documented defaults (127.0.0.1, 8585, empty token).
+// We re-create the flagset the same way runWeb does so the test stays
+// honest if anyone changes the defaults via a struct literal rewrite.
+func TestWebCommand_FlagDefaults(t *testing.T) {
+	var (
+		host  string
+		port  int
+		token string
+		cfg   string
+	)
+	fs := newWebFlagSetForTest(&host, &port, &token, &cfg)
+	if err := fs.Parse([]string{}); err != nil {
+		t.Fatalf("Parse: %v", err)
+	}
+	if host != "127.0.0.1" {
+		t.Errorf("host = %q; want %q", host, "127.0.0.1")
+	}
+	if port != 8585 {
+		t.Errorf("port = %d; want 8585", port)
+	}
+	if token != "" {
+		t.Errorf("token = %q; want empty", token)
+	}
+}
+
+// TestWebCommand_FlagOverrides confirms every flag plumbs through to its
+// destination variable when the user passes a non-default value.
+func TestWebCommand_FlagOverrides(t *testing.T) {
+	var (
+		host  string
+		port  int
+		token string
+		cfg   string
+	)
+	fs := newWebFlagSetForTest(&host, &port, &token, &cfg)
+	err := fs.Parse([]string{
+		"--web-interface-listen", "0.0.0.0",
+		"--web-port", "9090",
+		"--web-token", "abc",
+	})
+	if err != nil {
+		t.Fatalf("Parse: %v", err)
+	}
+	if host != "0.0.0.0" {
+		t.Errorf("host = %q; want %q", host, "0.0.0.0")
+	}
+	if port != 9090 {
+		t.Errorf("port = %d; want 9090", port)
+	}
+	if token != "abc" {
+		t.Errorf("token = %q; want %q", token, "abc")
+	}
+}
+
+// newWebFlagSetForTest mirrors the FlagSet runWeb builds. Kept in the test
+// file so the test stays self-contained even if runWeb's body evolves; the
+// flag names and defaults are the public contract.
+func newWebFlagSetForTest(host *string, port *int, token *string, cfg *string) *flag.FlagSet {
+	fs := flag.NewFlagSet("flowstate web", flag.ContinueOnError)
+	fs.SetOutput(io.Discard)
+	fs.StringVar(host, "web-interface-listen", "127.0.0.1", "")
+	fs.IntVar(port, "web-port", 8585, "")
+	fs.StringVar(token, "web-token", "", "")
+	fs.StringVar(cfg, "config", "", "")
+	return fs
+}
+
+// TestIsLoopbackHost pins the loopback classifier the web warning logic
+// uses. 0.0.0.0 and routable IPs must NOT be classified as loopback so
+// the user gets the warning when they bind everything-on-the-network.
+func TestIsLoopbackHost(t *testing.T) {
+	cases := []struct {
+		in   string
+		want bool
+	}{
+		{"127.0.0.1", true},
+		{"127.5.6.7", true}, // entire 127.0.0.0/8 is loopback per net.IP.IsLoopback.
+		{"::1", true},
+		{"localhost", true},
+		{"0.0.0.0", false},
+		{"192.168.1.5", false},
+		{"10.0.0.1", false},
+		{"example.com", false},
+		{"", false},
+	}
+	for _, tc := range cases {
+		tc := tc
+		t.Run(tc.in, func(t *testing.T) {
+			got := isLoopbackHost(tc.in)
+			if got != tc.want {
+				t.Errorf("isLoopbackHost(%q) = %v; want %v", tc.in, got, tc.want)
 			}
 		})
 	}

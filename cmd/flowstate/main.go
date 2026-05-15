@@ -32,6 +32,7 @@ const helpText = `flowstate — record, transcribe, and clean up speech with Gro
 
 Usage:
   flowstate [flags]                  Record (default).
+  flowstate web [flags]              Start the local web UI + JSON API.
   flowstate version                  Print version.
   flowstate config init [--force]    Write a default config file.
   flowstate config path              Print the resolved config path.
@@ -54,6 +55,12 @@ Record flags:
   --paste-delay <seconds>  Wait N seconds between clipboard seed and the
                            paste keystroke. Gives you time to focus the
                            destination window. 0 = immediate (default).
+
+Web flags (use with: flowstate web):
+  --web-interface-listen <host>  Interface to bind (default 127.0.0.1).
+  --web-port <port>              TCP port to listen on (default 8585).
+  --web-token <token>            Optional Bearer auth token. Empty = no auth.
+                                 FLOWSTATE_WEB_TOKEN env var is the fallback.
 `
 
 func main() {
@@ -86,6 +93,8 @@ func run(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 		return runConfig(args[1:], stdout, stderr)
 	case "devices":
 		return runDevices(stdout, stderr)
+	case "web":
+		return runWeb(context.Background(), args[1:], stderr)
 	}
 
 	// Anything else (flags like --config=foo or unrecognized positional)

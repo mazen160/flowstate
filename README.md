@@ -347,9 +347,63 @@ the config to make it sticky. The body of each prompt is embedded into the
 default config at `flowstate config init` time, so you can edit them in
 place and re-init won't clobber your changes (use `--force` to overwrite).
 
+## Web UI
+
+`flowstate web` starts a local HTTP server with a browser UI for dictation —
+useful when you want to dictate from a tab without keeping a terminal in
+focus, or when you want to share a session over the LAN.
+
+```sh
+flowstate web
+# ✓ flowstate web listening on http://127.0.0.1:8585
+# (open the URL in your browser; hold Enter, End, or Space to record)
+```
+
+The browser uses `MediaRecorder` to capture audio (WebM/Opus where
+supported, with OGG and MP4 fallbacks for Firefox and Safari), POSTs the
+clip to `/api/transcribe`, and renders the cleaned text. Per-session
+transcript history is persisted in `localStorage` — the server itself
+never writes audio or transcripts to disk. Export buttons emit JSON or
+Markdown for the current session.
+
+### Flags
+
+| Flag | Default | Effect |
+|---|---|---|
+| `--web-interface-listen <host>` | `127.0.0.1` | Interface to bind. Use `0.0.0.0` to accept LAN connections. |
+| `--web-port <port>` | `8585` | TCP port. |
+| `--web-token <token>` | _empty_ | Optional Bearer token. When set, every `/api/*` request must carry `Authorization: Bearer <token>`. `FLOWSTATE_WEB_TOKEN` is read as a fallback. |
+
+When you bind a non-loopback interface (e.g. `0.0.0.0`) **and** leave
+`--web-token` empty, flowstate prints a warning to stderr but still starts
+— the decision is yours.
+
+### API endpoints
+
+- `GET /api/health` — `{"ok": true, "version": "..."}`
+- `GET /api/info` — `{"version": "...", "auth_required": <bool>}`
+- `POST /api/transcribe` — multipart upload with an `audio` file part.
+  Returns `{"raw": "...", "cleaned": "...", "duration_ms": <int>}` on 200.
+  413 on uploads > 25 MiB, 415 if the `audio` part is missing, 401 when
+  a token is required and missing/wrong.
+
+```sh
+curl http://127.0.0.1:8585/api/health
+curl -F audio=@clip.webm http://127.0.0.1:8585/api/transcribe
+# With auth:
+curl -H "Authorization: Bearer $FLOWSTATE_WEB_TOKEN" \
+     -F audio=@clip.webm http://127.0.0.1:8585/api/transcribe
+```
+
+The web subcommand uses the same config file, system prompt, and
+Groq clients as `flowstate` itself, so vocabulary, output language, and
+cleanup model overrides all carry over.
+
 ## Subcommands
 
 - `flowstate` — record. The default command.
+- `flowstate web [flags]` — start the local web UI + JSON API. See the
+  **Web UI** section above for the three flags and behavior.
 - `flowstate version` — print the build identifier and Go runtime version.
 - `flowstate config init [--force] [--config <path>]` — write the default
   config to the resolved path. `--force` overwrites an existing file.

@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- `flowstate web` subcommand — starts a local HTTP server with a vanilla-JS
+  browser UI for dictation. The page captures audio via `MediaRecorder`,
+  POSTs it to `/api/transcribe`, and runs the existing Groq Whisper +
+  cleanup pipeline. Three flags: `--web-interface-listen` (default
+  `127.0.0.1`), `--web-port` (default `8585`), `--web-token` (optional
+  Bearer token; falls back to `FLOWSTATE_WEB_TOKEN`). Per-session
+  transcript history lives in `localStorage` — the server never persists
+  audio or transcripts. Binding a non-loopback interface without a token
+  prints a stderr warning at startup but does not refuse to start.
 - `--max-time <seconds>` flag + `max_time_seconds` config field. When > 0,
   recording auto-stops after the given duration and processes normally
   (exit 0). The recording prompt updates to `auto-stop in Ns (or press
