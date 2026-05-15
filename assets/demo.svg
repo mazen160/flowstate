@@ -78,18 +78,28 @@
     <text class="mono dim" x="225" y="0">-- press Enter to stop</text>
   </g>
 
+  <!-- All five phases run on a single 15-second loop. Timeline (in seconds):
+         0.0 -  5.4  Recording (mic-meter bars repeat 6x at 0.9s each)
+         5.5         Transcribing... fades in
+         6.5         Cleaning up... fades in
+         7.5         Done. fades in
+         8.5         Cleaned transcript fades in
+         8.5 - 15.0  Everything stays visible for ~6.5s of read time
+       Then the loop restarts. Translating those into keyTimes (fraction
+       of 15s): 5.5/15=0.367, 6.5/15=0.433, 7.5/15=0.500, 8.5/15=0.567. -->
+
   <!-- Phase 2: Transcribing... (fades in after recording phase) -->
   <g transform="translate(24,144)" opacity="0">
     <circle cx="6" cy="-5" r="6" fill="#22d3ee"/>
     <text class="mono text" x="22" y="0">Transcribing...</text>
-    <animate attributeName="opacity" values="0;0;1;1" keyTimes="0;0.62;0.66;1" dur="9s" repeatCount="indefinite"/>
+    <animate attributeName="opacity" values="0;0;1;1" keyTimes="0;0.34;0.367;1" dur="15s" repeatCount="indefinite"/>
   </g>
 
   <!-- Phase 3: Cleaning up... -->
   <g transform="translate(24,180)" opacity="0">
     <circle cx="6" cy="-5" r="6" fill="#22d3ee"/>
     <text class="mono text" x="22" y="0">Cleaning up...</text>
-    <animate attributeName="opacity" values="0;0;1;1" keyTimes="0;0.74;0.78;1" dur="9s" repeatCount="indefinite"/>
+    <animate attributeName="opacity" values="0;0;1;1" keyTimes="0;0.40;0.433;1" dur="15s" repeatCount="indefinite"/>
   </g>
 
   <!-- Phase 4: Done. (a checkmark drawn as a path, not a glyph) -->
@@ -97,22 +107,26 @@
     <path d="M 0 -6 L 5 0 L 14 -10" stroke="#4ade80" stroke-width="2.5" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
     <text class="mono text" x="22" y="0">Done.</text>
     <text class="mono dim"  x="82" y="0">(94 characters, 1.8s)</text>
-    <animate attributeName="opacity" values="0;0;1;1" keyTimes="0;0.84;0.88;1" dur="9s" repeatCount="indefinite"/>
+    <animate attributeName="opacity" values="0;0;1;1" keyTimes="0;0.46;0.500;1" dur="15s" repeatCount="indefinite"/>
   </g>
 
-  <!-- Phase 5: Cleaned transcript -->
+  <!-- Phase 5: Cleaned transcript. Stays fully visible from ~8.5s to 15s
+       so a reader has roughly 6.5 seconds to actually read both lines
+       before the loop restarts. -->
   <g transform="translate(24,272)" opacity="0">
     <text class="mono strong" x="0" y="0">Hey, just following up on the meeting from yesterday. I think we</text>
     <text class="mono strong" x="0" y="22">should definitely move the deadline to next Friday.</text>
-    <animate attributeName="opacity" values="0;0;1;1" keyTimes="0;0.9;0.94;1" dur="9s" repeatCount="indefinite"/>
+    <animate attributeName="opacity" values="0;0;1;1" keyTimes="0;0.53;0.567;1" dur="15s" repeatCount="indefinite"/>
   </g>
 
-  <!-- Blinking cursor at the end of the transcript -->
+  <!-- Blinking cursor at the end of the transcript. Stays hidden until
+       the transcript is on screen (keyTime 0.567), then blinks at ~2 Hz
+       through the rest of the loop. -->
   <rect class="caret" x="416" y="280" width="9" height="18" rx="1" opacity="0">
     <animate attributeName="opacity"
-             values="0;0;1;1;0;1;0;1"
-             keyTimes="0;0.92;0.94;0.95;0.96;0.97;0.98;1"
-             dur="9s" repeatCount="indefinite"/>
+             values="0;0;1;0;1;0;1;0;1;0;1;0;1;0;1"
+             keyTimes="0;0.567;0.60;0.633;0.667;0.70;0.733;0.767;0.80;0.833;0.867;0.90;0.933;0.967;1"
+             dur="15s" repeatCount="indefinite"/>
   </rect>
 
   <!-- Bottom hint pills. Width is set wide enough for the JetBrains Mono

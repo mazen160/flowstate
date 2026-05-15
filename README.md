@@ -663,12 +663,13 @@ What's shipped, and what's intentionally left out:
 - ✅ In-page result + history + JSON / Markdown export (web).
 - ✅ Translation via the cleanup pass.
 - ✅ Custom vocabulary for domain spellings.
-- 🟡 Streaming transcription (under design — see [Discussions](https://github.com/mazen160/flowstate/discussions)).
-- 🟡 Edit-mode subcommand for "rewrite this highlighted text by voice" (the `command` prompt is shipped, the wiring is queued).
+- 🟡 Streaming transcription.
+- 🟡 Edit-mode subcommand for "rewrite this highlighted text by voice".
+- 🟡 Local redaction of empty space locally.
+- 🟡 Background daemon for the CLI. a CLI invocation is one recording. The web server fills the long-running need. At one point, Flowstate can have shortcut keys to start recording as part of a CLI daemon.
 - ❌ Menu bar / system tray native app — flowstate intentionally stays a single binary; the web UI covers the "I want a button to click" use case.
-- ❌ Background daemon for the CLI — a CLI invocation is one recording. The web server fills the long-running need.
-- ❌ Offline / local transcription — flowstate calls Groq. For local, see [whisper.cpp](https://github.com/ggerganov/whisper.cpp).
-- ❌ OS-keychain integration — the Groq API key lives in `GROQ_API_KEY`. Persistence is your shell's job (or [direnv](https://direnv.net/), or a vault).
+- ❌ Offline / local transcription — flowstate calls Groq.
+- ❌ OS-keychain integration — the Groq API key lives in `GROQ_API_KEY`.
 
 Want one of the 🟡s sooner? Open an issue or chime in on Discussions.
 
