@@ -129,16 +129,12 @@ func runRecord(ctx context.Context, args []string, stdin io.Reader, stdout, stde
 		return 1
 	}
 
-	// t0 marks the start of the user-visible pipeline. We measure to the
-	// end of cleanup + output for the "Done" line so the reported duration
-	// matches "press Enter → see cleaned text" wall-clock time.
-	t0 := time.Now()
-
-	// 7/8. Construct trigger and start capture. The two trigger modes have
-	// different start semantics: Enter assumes capture is already running
-	// when Run blocks for the keystroke; PTT starts capture inside onStart
-	// when the key goes DOWN. Pick the right wiring per cfg.Trigger.
-	wavPath, err := runCapture(ctx, cfg, recorder, reporter, stdin, stderr)
+	// 7/8. Construct trigger and start capture. runCapture returns the
+	// duration spent actually recording so the final Done line can split
+	// "rec X · proc Y · total Z". Anything before runCapture (config load,
+	// mute, recorder construction) is fast enough not to need its own
+	// bucket; we treat it as effectively zero.
+	wavPath, recDur, err := runCapture(ctx, cfg, recorder, reporter, stdin, stderr)
 	if err != nil {
 		reporter.Error("%v", err)
 		return 1
@@ -150,6 +146,12 @@ func runRecord(ctx context.Context, args []string, stdin io.Reader, stdout, stde
 			_ = os.Remove(wavPath)
 		}
 	}()
+
+	// procStart bookends the processing phase: transcribe + cleanup +
+	// output. It begins the moment recording stops, so the user-facing
+	// "proc" timing reflects what they waited through after the Enter
+	// keystroke (or auto-stop).
+	procStart := time.Now()
 
 	// 9. Transcribe. The transcribe client uses a 20 s default timeout
 	// internally; we wrap ctx so a future Ctrl+C in the caller bubbles
@@ -234,7 +236,13 @@ func runRecord(ctx context.Context, args []string, stdin io.Reader, stdout, stde
 	// 14. Status line on stderr so stdout (which may have been piped to
 	// another command) stays clean. Routed through the reporter so colors
 	// + the duration tail come along for the ride.
-	reporter.Done(len(cleaned), time.Since(t0))
+	reporter.Done(ui.DoneStats{
+		Chars:       len(cleaned),
+		Words:       ui.CountWords(cleaned),
+		Tokens:      ui.EstimateTokens(cleaned),
+		RecordTime:  recDur,
+		ProcessTime: time.Since(procStart),
+	})
 	return 0
 }
 
@@ -259,7 +267,7 @@ func runCapture(
 	reporter *ui.Reporter,
 	stdin io.Reader,
 	stderr io.Writer,
-) (string, error) {
+) (wavPath string, recDur time.Duration, err error) {
 	// Derive an effective context. When max_time_seconds > 0, layer a
 	// timeout on top of the caller's ctx. The timer becomes a clean stop
 	// signal, NOT an error: when the trigger returns DeadlineExceeded and
@@ -287,8 +295,9 @@ func runCapture(
 		// Recording must start first so the user's "Recording…" prompt
 		// is truthful by the time it appears.
 		if err := recorder.Start(); err != nil {
-			return "", fmt.Errorf("start recorder: %w", err)
+			return "", 0, fmt.Errorf("start recorder: %w", err)
 		}
+		recStart := time.Now()
 		// Kick off the meter (or print the static prompt when stderr is
 		// not a TTY). stop must run before any subsequent reporter
 		// output so the meter line is cleared cleanly.
@@ -303,19 +312,20 @@ func runCapture(
 			// Best-effort stop on cancel so the temp WAV is at least
 			// flushed before we surface the cancellation error.
 			_, _ = recorder.Stop()
-			return "", fmt.Errorf("trigger: %w", err)
+			return "", 0, fmt.Errorf("trigger: %w", err)
 		}
 		stop()
+		recDur := time.Since(recStart)
 		path, err := recorder.Stop()
 		if err != nil {
-			return "", fmt.Errorf("stop recorder: %w", err)
+			return "", 0, fmt.Errorf("stop recorder: %w", err)
 		}
-		return path, nil
+		return path, recDur, nil
 
 	case "push-to-talk":
 		t, err := trigger.NewPushToTalkTrigger(cfg.PTTKey)
 		if err != nil {
-			return "", err
+			return "", 0, err
 		}
 		// onStart begins capture on key-down. If Start fails, the
 		// trigger Run returns that error and we surface it as the
@@ -326,28 +336,36 @@ func runCapture(
 		if cfg.MaxTimeSeconds > 0 {
 			ptHint = fmt.Sprintf("Recording — auto-stop in %ds (or release key)", cfg.MaxTimeSeconds)
 		}
+		// recStart is captured inside onStart so PTT-mode timing is the
+		// "held the key" wall time, not "since runCapture began".
+		var recStart time.Time
 		onStart := func() error {
 			if err := recorder.Start(); err != nil {
 				return err
 			}
+			recStart = time.Now()
 			reporter.Step(ptHint)
 			return nil
 		}
 		if err := t.Run(effCtx, onStart); err != nil && !timedAutoStop(err) {
 			_, _ = recorder.Stop()
 			_ = t.Close()
-			return "", fmt.Errorf("trigger: %w", err)
+			return "", 0, fmt.Errorf("trigger: %w", err)
 		}
 		_ = t.Close()
+		recDur := time.Duration(0)
+		if !recStart.IsZero() {
+			recDur = time.Since(recStart)
+		}
 		path, err := recorder.Stop()
 		if err != nil {
-			return "", fmt.Errorf("stop recorder: %w", err)
+			return "", 0, fmt.Errorf("stop recorder: %w", err)
 		}
-		return path, nil
+		return path, recDur, nil
 
 	default:
 		// Validate() should have caught this; defensive guard for the
 		// case where applyFlags overwrote Trigger with garbage.
-		return "", fmt.Errorf("invalid trigger %q (want enter or push-to-talk)", cfg.Trigger)
+		return "", 0, fmt.Errorf("invalid trigger %q (want enter or push-to-talk)", cfg.Trigger)
 	}
 }

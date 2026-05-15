@@ -250,15 +250,96 @@ func (r *Reporter) Step(label string) {
 	fmt.Fprintf(r.w, "%s %s…\n", dot, label)
 }
 
-// Done prints the green success line. duration is formatted as a short
-// human-friendly string ("2.3s", "850ms").
-func (r *Reporter) Done(chars int, duration time.Duration) {
+// DoneStats is the payload for [Reporter.Done]. All fields are optional;
+// the renderer skips zero values gracefully so callers can leave any
+// component unset (e.g. for paths that don't track separate record /
+// process time).
+type DoneStats struct {
+	Chars       int           // character count of the final cleaned text
+	Words       int           // whitespace-split word count
+	Tokens      int           // estimated token count (~chars/4 heuristic)
+	RecordTime  time.Duration // wall time spent recording audio
+	ProcessTime time.Duration // wall time spent on transcribe + cleanup + output
+}
+
+// Total returns RecordTime + ProcessTime — the user-perceived wall clock
+// from speaking to result.
+func (s DoneStats) Total() time.Duration {
+	return s.RecordTime + s.ProcessTime
+}
+
+// Done prints the green success line. Renders two lines when timing
+// detail is available, one line otherwise:
+//
+//	✓ Done — 47 chars · 12 words · ~14 tokens
+//	  rec 3.2s · proc 1.8s · total 5.0s
+//
+// When all timing fields are zero, the second line is omitted. When
+// Words or Tokens are zero, those segments are omitted from the first
+// line so callers that don't track them produce sensible output.
+func (r *Reporter) Done(s DoneStats) {
 	check := r.colorize(ansiGreen, "✓")
-	msg := fmt.Sprintf("Done. (%d characters, %s)", chars, formatDuration(duration))
-	if r.color {
-		msg = ansiGreen + msg + ansiReset
+
+	// First line: content summary. Always shows char count; words /
+	// tokens are added when present.
+	parts := []string{fmt.Sprintf("%d chars", s.Chars)}
+	if s.Words > 0 {
+		parts = append(parts, fmt.Sprintf("%d words", s.Words))
 	}
-	fmt.Fprintf(r.w, "%s %s\n", check, msg)
+	if s.Tokens > 0 {
+		parts = append(parts, fmt.Sprintf("~%d tokens", s.Tokens))
+	}
+	headline := "Done — " + strings.Join(parts, " · ")
+	if r.color {
+		headline = ansiGreen + headline + ansiReset
+	}
+	fmt.Fprintf(r.w, "%s %s\n", check, headline)
+
+	// Second line: timing breakdown. Skipped entirely when nothing is
+	// set. Each component is printed only if non-zero so partial inputs
+	// don't render "rec 0ms · proc 1.8s".
+	if s.RecordTime == 0 && s.ProcessTime == 0 {
+		return
+	}
+	var timingParts []string
+	if s.RecordTime > 0 {
+		timingParts = append(timingParts, "rec "+formatDuration(s.RecordTime))
+	}
+	if s.ProcessTime > 0 {
+		timingParts = append(timingParts, "proc "+formatDuration(s.ProcessTime))
+	}
+	if total := s.Total(); total > 0 && len(timingParts) > 1 {
+		timingParts = append(timingParts, "total "+formatDuration(total))
+	}
+	timing := "  " + strings.Join(timingParts, " · ")
+	if r.color {
+		// Dim cyan to keep the eye on the headline.
+		timing = ansiCyan + timing + ansiReset
+	}
+	fmt.Fprintf(r.w, "%s\n", timing)
+}
+
+// CountWords returns the whitespace-split word count of s. Empty / all-
+// whitespace strings return 0. Exposed so callers (the orchestrator)
+// can compute the value once and pass it via DoneStats.
+func CountWords(s string) int {
+	return len(strings.Fields(s))
+}
+
+// EstimateTokens returns a rough token estimate using the standard
+// ~4-chars-per-token heuristic. Tokenization is model-specific in
+// reality (BPE, tiktoken, etc.), so this is a best-effort approximation
+// — useful for "is this going to fit in the context window?" mental
+// math, not for billing. Empty input returns 0.
+//
+// The rounding is "ceil divide" so that a 1-character string still
+// reports 1 token rather than 0.
+func EstimateTokens(s string) int {
+	if len(s) == 0 {
+		return 0
+	}
+	const charsPerToken = 4
+	return (len(s) + charsPerToken - 1) / charsPerToken
 }
 
 // Warning prints a yellow ⚠ warning line. Use for non-fatal soft errors

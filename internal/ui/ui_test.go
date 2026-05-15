@@ -17,7 +17,7 @@ func TestReporter_NoANSIWhenWriterIsBuffer(t *testing.T) {
 	var buf bytes.Buffer
 	r := NewReporter(&buf, ColorAuto)
 	r.Step("Transcribing")
-	r.Done(42, 1234*time.Millisecond)
+	r.Done(DoneStats{Chars: 42, Words: 7, Tokens: 11, ProcessTime: 1234 * time.Millisecond})
 	r.Warning("mute failed: %v", "permission denied")
 	r.Error("transcribe: %v", "boom")
 	// Recording on a non-TTY prints one static line; assert below.
@@ -48,7 +48,7 @@ func TestReporter_ANSIEmittedWhenColorAlways(t *testing.T) {
 	var buf bytes.Buffer
 	r := NewReporter(&buf, ColorAlways)
 	r.Step("Cleaning up")
-	r.Done(7, 850*time.Millisecond)
+	r.Done(DoneStats{Chars: 7, ProcessTime: 850 * time.Millisecond})
 
 	out := buf.String()
 	if !strings.Contains(out, "\x1b[") {
@@ -66,7 +66,7 @@ func TestReporter_RespectsNO_COLOR(t *testing.T) {
 	var buf bytes.Buffer
 	r := NewReporter(&buf, ColorAuto)
 	r.Step("Transcribing")
-	r.Done(1, 100*time.Millisecond)
+	r.Done(DoneStats{Chars: 1, ProcessTime: 100 * time.Millisecond})
 	r.Warning("warn")
 	r.Error("err")
 
@@ -83,7 +83,7 @@ func TestReporter_ColorNever(t *testing.T) {
 	var buf bytes.Buffer
 	r := NewReporter(&buf, ColorNever)
 	r.Step("step")
-	r.Done(0, 0)
+	r.Done(DoneStats{})
 	r.Warning("w")
 	r.Error("e")
 
@@ -198,5 +198,116 @@ func TestReporter_Recording_EmptyHintFallsBack(t *testing.T) {
 	out := buf.String()
 	if !strings.Contains(out, "press Enter to stop") {
 		t.Fatalf("expected default hint, got: %q", out)
+	}
+}
+
+// TestDone_FullStats renders the headline + timing breakdown when every
+// field is populated. Pins each labeled segment so a copy-tweak surfaces
+// the failure with a clear diff.
+func TestDone_FullStats(t *testing.T) {
+	var buf bytes.Buffer
+	r := NewReporter(&buf, ColorNever)
+	r.Done(DoneStats{
+		Chars:       47,
+		Words:       9,
+		Tokens:      12,
+		RecordTime:  3200 * time.Millisecond,
+		ProcessTime: 1800 * time.Millisecond,
+	})
+	out := buf.String()
+	for _, want := range []string{"47 chars", "9 words", "~12 tokens", "rec 3.2s", "proc 1.8s", "total 5.0s"} {
+		if !strings.Contains(out, want) {
+			t.Errorf("Done full-stats output missing %q:\n%s", want, out)
+		}
+	}
+}
+
+// TestDone_NoTimingOmitsSecondLine: when both timing fields are zero, the
+// "rec/proc/total" line is suppressed entirely so the output stays a single
+// line.
+func TestDone_NoTimingOmitsSecondLine(t *testing.T) {
+	var buf bytes.Buffer
+	r := NewReporter(&buf, ColorNever)
+	r.Done(DoneStats{Chars: 5, Words: 1, Tokens: 2})
+	out := buf.String()
+	lineCount := strings.Count(out, "\n")
+	if lineCount != 1 {
+		t.Errorf("expected single-line output with no timing; got %d lines:\n%s", lineCount, out)
+	}
+	for _, banned := range []string{"rec ", "proc ", "total "} {
+		if strings.Contains(out, banned) {
+			t.Errorf("Done with zero timing should not mention %q:\n%s", banned, out)
+		}
+	}
+}
+
+// TestDone_PartialContentOmitsSegments: words=0 / tokens=0 must drop those
+// segments so callers that don't track them produce clean output.
+func TestDone_PartialContentOmitsSegments(t *testing.T) {
+	var buf bytes.Buffer
+	r := NewReporter(&buf, ColorNever)
+	r.Done(DoneStats{Chars: 12})
+	out := buf.String()
+	if !strings.Contains(out, "12 chars") {
+		t.Errorf("expected '12 chars' in output:\n%s", out)
+	}
+	if strings.Contains(out, "words") || strings.Contains(out, "tokens") {
+		t.Errorf("zero words/tokens should be omitted:\n%s", out)
+	}
+}
+
+// TestDone_SingleTimingFieldDropsTotal: when only one of rec/proc is set,
+// the synthetic "total" segment must be suppressed (it would just duplicate
+// the single value).
+func TestDone_SingleTimingFieldDropsTotal(t *testing.T) {
+	var buf bytes.Buffer
+	r := NewReporter(&buf, ColorNever)
+	r.Done(DoneStats{Chars: 5, ProcessTime: 2 * time.Second})
+	out := buf.String()
+	if !strings.Contains(out, "proc 2.0s") {
+		t.Errorf("expected 'proc 2.0s' in output:\n%s", out)
+	}
+	if strings.Contains(out, "total ") {
+		t.Errorf("total should not appear with only one timing field:\n%s", out)
+	}
+}
+
+// TestCountWords covers the empty / whitespace-only / multi-whitespace
+// cases that the orchestrator can produce after sanitization.
+func TestCountWords(t *testing.T) {
+	cases := map[string]int{
+		"":                   0,
+		"   ":                0,
+		"hello":              1,
+		"hello world":        2,
+		"  hello   world  ":  2,
+		"one two three four": 4,
+		"line1\nline2":       2,
+	}
+	for input, want := range cases {
+		if got := CountWords(input); got != want {
+			t.Errorf("CountWords(%q) = %d; want %d", input, got, want)
+		}
+	}
+}
+
+// TestEstimateTokens pins the ceil-div-by-4 heuristic for a few inputs.
+// The exact ratio is approximate by design (real tokenization is BPE),
+// but the formula must be stable across builds.
+func TestEstimateTokens(t *testing.T) {
+	cases := map[string]int{
+		"":      0,
+		"a":     1, // 1/4 → ceil = 1
+		"ab":    1,
+		"abc":   1,
+		"abcd":  1,
+		"abcde": 2,
+		strings.Repeat("x", 16):  4,
+		strings.Repeat("x", 100): 25,
+	}
+	for input, want := range cases {
+		if got := EstimateTokens(input); got != want {
+			t.Errorf("EstimateTokens(%q) = %d; want %d", input, got, want)
+		}
 	}
 }
