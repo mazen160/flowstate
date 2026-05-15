@@ -8,67 +8,91 @@
 <link rel="stylesheet" href="/static/style.css">
 <style>
   /* Critical layout shipped inline so the page paints before app.js loads. */
-  body { margin: 0; min-height: 100vh; background: #0e1014; color: #e6e8eb;
-         font: 15px/1.45 -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif; }
-  .wrap { max-width: 760px; margin: 0 auto; padding: 24px 20px 80px; }
-  header { display: flex; align-items: baseline; justify-content: space-between; margin-bottom: 28px; }
+  :root { color-scheme: dark; }
+  html, body { margin: 0; background: #07080b; }
+  body {
+    min-height: 100vh;
+    color: #e6e8eb;
+    font: 15px/1.5 -apple-system, BlinkMacSystemFont, "Inter", "Segoe UI", system-ui, sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
 </style>
 </head>
 <body>
-<div class="wrap">
-  <header>
-    <h1 class="brand">flowstate</h1>
+
+<header class="topbar">
+  <div class="topbar-inner">
+    <div class="brand">
+      <span class="brand-dot" aria-hidden="true"></span>
+      <span class="brand-name">flowstate</span>
+    </div>
     <div class="session-bar">
-      <span id="session-label" class="muted">Session</span>
-      <button id="new-session" class="ghost" type="button">New session</button>
-    </div>
-  </header>
-
-  <main>
-    <section class="recorder">
-      <button id="rec" type="button" aria-pressed="false" aria-label="Record">
-        <span class="rec-dot" aria-hidden="true"></span>
+      <span id="session-label" class="session-label">Session</span>
+      <button id="new-session" class="btn btn-ghost" type="button">
+        <span class="icon-plus" aria-hidden="true">+</span> New session
       </button>
-      <p id="rec-hint" class="muted hint">Hold <kbd>Enter</kbd>, <kbd>End</kbd>, or <kbd>Space</kbd> to record</p>
-      <p id="rec-status" class="status" role="status" aria-live="polite"></p>
-    </section>
-
-    <section id="result" class="card result" hidden>
-      <h2 class="card-title">Latest</h2>
-      <p id="result-cleaned" class="result-text"></p>
-      <details class="raw">
-        <summary>Show raw</summary>
-        <p id="result-raw" class="muted result-raw"></p>
-      </details>
-    </section>
-
-    <section class="history">
-      <h2 class="card-title">History</h2>
-      <ol id="history-list" class="history-list"></ol>
-      <p id="history-empty" class="muted empty">No transcripts in this session yet.</p>
-    </section>
-  </main>
-
-  <footer>
-    <div class="footer-row">
-      <button id="export-json" class="ghost" type="button">Export JSON</button>
-      <button id="export-md" class="ghost" type="button">Export Markdown</button>
-      <button id="toggle-settings" class="ghost" type="button" aria-expanded="false">Settings</button>
     </div>
-    <div id="settings" class="settings" hidden>
+  </div>
+</header>
+
+<main class="page">
+  <section class="recorder" aria-labelledby="rec-heading">
+    <h1 id="rec-heading" class="visually-hidden">Record</h1>
+    <button id="rec" class="rec-btn" type="button" aria-pressed="false" aria-label="Record">
+      <span class="rec-ring" aria-hidden="true"></span>
+      <span class="rec-dot" aria-hidden="true"></span>
+    </button>
+    <p id="rec-hint" class="rec-hint">
+      Hold <kbd>Enter</kbd>, <kbd>End</kbd>, or <kbd>Space</kbd> to record
+    </p>
+    <p id="rec-status" class="rec-status" role="status" aria-live="polite"></p>
+  </section>
+
+  <section id="result" class="result-card" hidden>
+    <div class="result-header">
+      <span class="section-label">Latest</span>
+      <button class="raw-toggle" id="result-raw-toggle" type="button" aria-expanded="false">
+        Show raw
+      </button>
+    </div>
+    <p id="result-cleaned" class="result-text"></p>
+    <p id="result-raw" class="result-raw" hidden></p>
+  </section>
+
+  <section class="history-section">
+    <div class="history-header">
+      <span class="section-label">History</span>
+      <span id="history-count" class="history-count"></span>
+    </div>
+    <ol id="history-list" class="history-list"></ol>
+    <p id="history-empty" class="history-empty">No transcripts in this session yet.</p>
+  </section>
+</main>
+
+<footer class="dock">
+  <div class="dock-inner">
+    <button id="export-json" class="btn btn-ghost" type="button">Export JSON</button>
+    <button id="export-md" class="btn btn-ghost" type="button">Export Markdown</button>
+    <button id="toggle-settings" class="btn btn-ghost" type="button" aria-expanded="false">
+      <span class="icon-gear" aria-hidden="true">⚙</span> Settings
+    </button>
+  </div>
+  <div id="settings" class="settings-sheet" hidden>
+    <div class="settings-grid">
       <label class="field">
-        <span class="muted">API token</span>
+        <span class="field-label">API token</span>
         <input id="token-input" type="password" autocomplete="off" spellcheck="false"
-               placeholder="Bearer token (only needed if the server requires one)">
+               placeholder="Bearer token (only if the server requires one)">
       </label>
       <label class="field">
-        <span class="muted">Switch session</span>
+        <span class="field-label">Switch session</span>
         <select id="session-select"></select>
       </label>
-      <p id="version-line" class="muted tiny"></p>
     </div>
-  </footer>
-</div>
+    <p id="version-line" class="version-line"></p>
+  </div>
+</footer>
+
 <script src="/static/app.js" defer></script>
 </body>
 </html>

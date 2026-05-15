@@ -133,46 +133,94 @@
     }
   }
 
+  function fmtHistoryTime(d) {
+    // Short, scannable: "8:04 AM · May 15". Falls back to locale string
+    // if Intl.DateTimeFormat is unavailable.
+    try {
+      var t = d.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+      var dt = d.toLocaleDateString([], { month: 'short', day: 'numeric' });
+      return t + ' · ' + dt;
+    } catch (e) {
+      return d.toLocaleString();
+    }
+  }
+
+  // makeRawToggle wires a button + hidden <p> pair to behave like a
+  // <details>/<summary>, but with predictable focus styling. The caller
+  // owns the elements; we just hook the click + ARIA.
+  function makeRawToggle(button, body) {
+    button.setAttribute('aria-expanded', 'false');
+    body.hidden = true;
+    button.addEventListener('click', function () {
+      var open = button.getAttribute('aria-expanded') === 'true';
+      button.setAttribute('aria-expanded', open ? 'false' : 'true');
+      body.hidden = open;
+    });
+  }
+
   function renderHistory() {
     var s = currentSession();
     var list = $('history-list');
     list.innerHTML = '';
     var items = s ? s.items.slice().reverse() : [];
+    var countEl = $('history-count');
     if (items.length === 0) {
       $('history-empty').hidden = false;
       $('result').hidden = true;
+      if (countEl) countEl.textContent = '';
       return;
     }
     $('history-empty').hidden = true;
+    if (countEl) countEl.textContent = items.length + (items.length === 1 ? ' transcript' : ' transcripts');
     for (var i = 0; i < items.length; i++) {
       var it = items[i];
       var li = document.createElement('li');
+      li.className = 'history-item';
+
+      var meta = document.createElement('div');
+      meta.className = 'history-meta';
       var ts = document.createElement('span');
-      ts.className = 'ts';
-      ts.textContent = new Date(it.ts).toLocaleString();
-      li.appendChild(ts);
+      ts.textContent = fmtHistoryTime(new Date(it.ts));
+      meta.appendChild(ts);
+      li.appendChild(meta);
+
       var p = document.createElement('p');
-      p.className = 'cleaned';
+      p.className = 'history-cleaned';
       p.textContent = it.cleaned || '(empty cleaned output)';
       li.appendChild(p);
+
       if (it.raw && it.raw !== it.cleaned) {
-        var det = document.createElement('details');
-        det.className = 'raw-wrap';
-        var sum = document.createElement('summary');
-        sum.textContent = 'Show raw';
-        det.appendChild(sum);
-        var rp = document.createElement('p');
-        rp.className = 'raw-text';
-        rp.textContent = it.raw;
-        det.appendChild(rp);
-        li.appendChild(det);
+        var toggle = document.createElement('button');
+        toggle.type = 'button';
+        toggle.className = 'raw-toggle';
+        toggle.textContent = 'Show raw';
+        var raw = document.createElement('p');
+        raw.className = 'history-raw';
+        raw.textContent = it.raw;
+        makeRawToggle(toggle, raw);
+        li.appendChild(toggle);
+        li.appendChild(raw);
       }
+
       list.appendChild(li);
     }
     // Latest card
     var latest = items[0];
     $('result-cleaned').textContent = latest.cleaned || '(no cleaned output)';
-    $('result-raw').textContent = latest.raw || '';
+    var rawEl = $('result-raw');
+    var rawToggle = $('result-raw-toggle');
+    if (latest.raw && latest.raw !== latest.cleaned) {
+      rawEl.textContent = latest.raw;
+      rawToggle.hidden = false;
+      // Reset to collapsed on each render so the panel doesn't surprise
+      // the user with an open raw block on a new transcription.
+      rawToggle.setAttribute('aria-expanded', 'false');
+      rawEl.hidden = true;
+    } else {
+      rawEl.textContent = '';
+      rawToggle.hidden = true;
+      rawEl.hidden = true;
+    }
     $('result').hidden = false;
   }
 
@@ -425,6 +473,17 @@
       persist();
       rerender();
     });
+    // Result-card raw toggle is static markup; per-item toggles are wired
+    // in renderHistory() since they're recreated on every render.
+    var resultToggle = $('result-raw-toggle');
+    var resultRaw = $('result-raw');
+    if (resultToggle && resultRaw) {
+      resultToggle.addEventListener('click', function () {
+        var open = resultToggle.getAttribute('aria-expanded') === 'true';
+        resultToggle.setAttribute('aria-expanded', open ? 'false' : 'true');
+        resultRaw.hidden = open;
+      });
+    }
   }
 
   async function loadInfo() {
