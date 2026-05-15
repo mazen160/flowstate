@@ -142,14 +142,6 @@ body > * { position: relative; z-index: 1; }
 .brand-mark .bar {
   fill: url(#fsAccent);
 }
-.brand-mark .caret {
-  animation: caret-blink 1.6s ease-in-out infinite;
-}
-@keyframes caret-blink {
-  0%, 45%   { opacity: 1; }
-  50%, 95%  { opacity: 0.2; }
-  100%      { opacity: 1; }
-}
 
 .brand-text {
   display: inline-flex;
@@ -328,7 +320,6 @@ kbd {
 }
 .rec-icon svg { width: 96px; height: 50px; display: block; }
 .rec-icon .bar { fill: url(#fsAccent); }
-.rec-icon .caret { animation: caret-blink 1.6s ease-in-out infinite; }
 
 /* Meter layer: 7 vertical bars driven from JS while recording. */
 .rec-meter {
@@ -401,36 +392,13 @@ kbd {
   50%      { opacity: 1; }
 }
 
-/* Two-line recorder hint: a primary instruction (tap to toggle) + a
-   subtler secondary instruction (press & hold for push-to-talk). The
-   subline gets a slight pill background so it reads as a "pro tip"
-   without crowding the primary line. */
 .rec-hint {
   margin: 6px 0 0;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 6px;
-  text-align: center;
-}
-.rec-hint-line {
   color: var(--text-2);
   font-size: 15px;
-  line-height: 1.5;
+  line-height: 1.55;
+  text-align: center;
 }
-.rec-hint-line strong {
-  color: var(--text);
-  font-weight: 600;
-}
-.rec-hint-sub {
-  font-size: 13px;
-  color: var(--text-3);
-  padding: 4px 10px;
-  border-radius: 999px;
-  background: var(--surface-2);
-  border: 1px solid var(--line);
-}
-.rec-hint-sub strong { color: var(--text-2); }
 
 .rec-status {
   min-height: 1.4em;
@@ -440,18 +408,6 @@ kbd {
   font-variant-numeric: tabular-nums;
   text-align: center;
 }
-
-/* While the user is hold-to-talking, the rec button gets a "holding"
-   data-state. We tweak the ring + scale subtly so it feels like the
-   button is being squeezed. */
-.rec-btn[data-hold="true"] {
-  transform: scale(0.97);
-  box-shadow:
-    0 1px 0 rgba(17, 21, 31, 0.06),
-    0 22px 50px -22px rgba(139, 58, 216, 0.65),
-    0 10px 22px -10px rgba(14, 165, 194, 0.38);
-}
-.rec-btn[data-hold="true"]:active { transform: scale(0.95); }
 
 /* ────────── section labels ────────── */
 
@@ -926,8 +882,6 @@ kbd {
 /* ────────── reduced-motion ────────── */
 
 @media (prefers-reduced-motion: reduce) {
-  .brand-mark .caret,
-  .rec-icon .caret { animation: none; opacity: 1; }
   .rec-btn[data-state="recording"] .rec-ring,
   .rec-btn[data-state="uploading"] .rec-ring,
   .rec-btn[data-state="uploading"] .rec-meter { animation: none; }

@@ -34,7 +34,10 @@
     analyser: null,
     sourceNode: null,
     rafId: 0,
-    timeData: null
+    timeData: null,
+    // Press timestamp captured on press; consulted on release to decide
+    // whether the gesture was a tap (toggle) or a hold (stop now).
+    pressStartTs: 0
   };
 
   // METER_BARS must match the count of <span class="rec-meter-bar"> nodes
@@ -777,45 +780,103 @@
     return tag === 'INPUT' || tag === 'TEXTAREA' || el.isContentEditable;
   }
 
-  function isToggleKey(ev) {
-    return ev.key === 'Enter' || ev.key === 'End' || ev.code === 'Space' || ev.key === ' ';
+  // ---- Recording trigger (tap-or-hold, one model for keys + pointer) ---
+  //
+  // A single state machine drives the record button, the Space key, and
+  // the Enter key. The model is:
+  //
+  //   On press:
+  //     - If we're recording, stop. (This is the "tap again to stop" path
+  //       after a previous tap-to-start.)
+  //     - Otherwise start recording, and remember the press timestamp.
+  //   On release:
+  //     - If the press lasted >= HOLD_THRESHOLD_MS, treat it as a hold and
+  //       stop recording now (release-to-send).
+  //     - Otherwise treat it as a tap; leave recording running. The next
+  //       press will hit the "stop" branch above.
+  //
+  // No source tracking, no timers, no pointer capture, no data-attributes.
+  // Just one number (REC.pressStartTs) and one threshold.
+  var HOLD_THRESHOLD_MS = 320;
+
+  function pressRecord() {
+    if (REC.state === 'uploading') return;     // ignore presses during upload
+    if (REC.state === 'recording') {
+      // A second press while already recording is the user explicitly
+      // stopping a tap-started recording. Reset pressStartTs so the
+      // upcoming release can't be misread as a hold.
+      REC.pressStartTs = 0;
+      stopRecording();
+      return;
+    }
+    REC.pressStartTs = Date.now();
+    startRecording();
   }
 
-  // toggleRecording flips recording state. Idle → start; recording → stop.
-  // Uploading is a no-op so a stray click during the network round trip
-  // doesn't kick off a second capture before the first response lands.
-  function toggleRecording() {
-    if (REC.state === 'recording') {
+  function releaseRecord() {
+    if (!REC.pressStartTs) return;             // no matching press → nothing to release
+    var heldMs = Date.now() - REC.pressStartTs;
+    REC.pressStartTs = 0;
+    if (heldMs >= HOLD_THRESHOLD_MS && REC.state === 'recording') {
       stopRecording();
-    } else if (REC.state === 'idle' || !REC.state) {
-      startRecording();
     }
+    // else: a tap. Leave recording running; the next pressRecord() stops it.
   }
 
   function bindKeys() {
-    // Click-to-toggle: one keydown starts, the next stops. We listen on
-    // keydown only (no keyup) so holding the key doesn't accidentally
-    // toggle off when released. ev.repeat is filtered so a user holding
-    // the key down doesn't spam toggles.
-    window.addEventListener('keydown', function (ev) {
-      if (ev.repeat) return;
+    // Enter and Space behave identically: tap to toggle, hold to stream.
+    // We capture-phase the listener on document so we beat any focused
+    // <button>'s default Space-activation, which would otherwise scroll
+    // the page or trigger an unrelated button (New session, Settings,
+    // etc). preventDefault on keydown stops the page-scroll on Space
+    // when focus is on <body>.
+    var isHotkey = function (ev) {
+      return ev.key === 'Enter' || ev.code === 'Space' || ev.key === ' ';
+    };
+    document.addEventListener('keydown', function (ev) {
+      if (!isHotkey(ev)) return;
+      if (ev.repeat) { ev.preventDefault(); return; }
       if (isTextTarget(document.activeElement)) return;
-      if (!isToggleKey(ev)) return;
       ev.preventDefault();
-      toggleRecording();
+      pressRecord();
+    }, true);
+    document.addEventListener('keyup', function (ev) {
+      if (!isHotkey(ev)) return;
+      if (isTextTarget(document.activeElement)) return;
+      ev.preventDefault();
+      releaseRecord();
+    }, true);
+    // Window blur fires the release too: alt-tabbing while holding Space
+    // shouldn't strand the page in recording mode forever.
+    window.addEventListener('blur', function () {
+      if (REC.pressStartTs) releaseRecord();
     });
   }
 
   function bindPointer() {
     var btn = $('rec');
-    // Use 'click' (not pointerdown/up) so the native button semantics
-    // are preserved: Space/Enter while the button is focused still fires
-    // the click via the browser's default activation behavior, and a
-    // stray pointerdown that doesn't land in a release won't toggle.
-    btn.addEventListener('click', function (ev) {
+    if (!btn) return;
+    // One pointerdown/up pair handles mouse, touch, and pen. A right-
+    // click (button !== 0) is ignored.
+    btn.addEventListener('pointerdown', function (ev) {
+      if (ev.button !== undefined && ev.button !== 0) return;
       ev.preventDefault();
-      toggleRecording();
+      pressRecord();
     });
+    btn.addEventListener('pointerup', function (ev) {
+      ev.preventDefault();
+      releaseRecord();
+    });
+    // pointercancel covers gestures that the OS reclaims (system menus,
+    // touch interruptions). Treat it as a release so we don't strand a
+    // recording.
+    btn.addEventListener('pointercancel', function () {
+      if (REC.pressStartTs) releaseRecord();
+    });
+    // The browser also fires a synthetic click on Space/Enter when the
+    // button has focus — we already handled that via the document-level
+    // keydown above, so swallow this duplicate.
+    btn.addEventListener('click', function (ev) { ev.preventDefault(); });
   }
 
   function bindUI() {
@@ -875,9 +936,11 @@
       });
     }
     // Clear-local-data button. Confirms first since this wipes every
-    // session, transcript, and the saved token. After clearing we reload
-    // the page so the in-memory state restarts cleanly without us having
-    // to reset every UI surface manually.
+    // session, transcript, and the saved token. After clearing we set
+    // a one-shot flag in sessionStorage so the post-reload boot can
+    // surface a confirmation toast (the toast wouldn't survive the
+    // reload otherwise), then reload so the in-memory state restarts
+    // cleanly without us having to reset every UI surface manually.
     var clearBtn = $('clear-storage');
     if (clearBtn) {
       clearBtn.addEventListener('click', function () {
@@ -893,6 +956,8 @@
           localStorage.removeItem('flowstate.token');
           localStorage.removeItem('flowstate.autoCopy');
         } catch (e) { /* ignore quota / disabled storage errors */ }
+        try { sessionStorage.setItem('flowstate.cleared', '1'); }
+        catch (e) { /* private mode — toast just won't fire */ }
         location.reload();
       });
     }
@@ -938,5 +1003,19 @@
     setRecState('idle');
     rerender();
     loadInfo();
+    // Surface the post-clear confirmation if the previous page wrote
+    // the one-shot flag before reloading. We consume the flag on read
+    // so a second navigation doesn't re-trigger the toast.
+    try {
+      if (sessionStorage.getItem('flowstate.cleared') === '1') {
+        sessionStorage.removeItem('flowstate.cleared');
+        showToast('Local data cleared', {
+          desc: 'Every session, transcript, and saved token has been removed from this browser.',
+          variant: 'info',
+          icon: '✓',
+          duration: 3600
+        });
+      }
+    } catch (e) { /* sessionStorage disabled — silent skip */ }
   });
 })();
