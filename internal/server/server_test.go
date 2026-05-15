@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
-	"fmt"
 	"io"
 	"mime/multipart"
 	"net/http"
@@ -113,6 +112,12 @@ func buildMultipart(t *testing.T, filename string, audio []byte) (io.Reader, str
 // startListening starts the Server on a random port and returns a base URL
 // like http://127.0.0.1:54321. The returned cancel func must be called from
 // the test to unblock ListenAndServe and release the port.
+//
+// Uses Server.WaitReady to block until the listener is bound. The earlier
+// version of this helper polled s.opts.ListenPort, which the race detector
+// correctly flagged because ListenAndServe was concurrently writing it.
+// WaitReady is the race-safe path: it selects on a chan-struct{} that
+// ListenAndServe closes under sync.Once after the bind succeeds.
 func startListening(t *testing.T, s *Server) (string, context.CancelFunc) {
 	t.Helper()
 	ctx, cancel := context.WithCancel(context.Background())
@@ -124,19 +129,15 @@ func startListening(t *testing.T, s *Server) (string, context.CancelFunc) {
 		errCh <- s.ListenAndServe(ctx)
 	}()
 
-	// Poll for the listener to come up. ListenAndServe writes the
-	// resolved port back into s.opts; we just need to wait until it's
-	// non-zero.
-	deadline := time.Now().Add(2 * time.Second)
-	for s.opts.ListenPort == 0 && time.Now().Before(deadline) {
-		time.Sleep(5 * time.Millisecond)
-	}
-	if s.opts.ListenPort == 0 {
+	readyCtx, readyCancel := context.WithTimeout(ctx, 2*time.Second)
+	defer readyCancel()
+	addr, err := s.WaitReady(readyCtx)
+	if err != nil {
 		cancel()
 		<-errCh
-		t.Fatalf("server never resolved a port")
+		t.Fatalf("server never came up: %v", err)
 	}
-	base := fmt.Sprintf("http://%s", s.Addr())
+	base := "http://" + addr
 
 	t.Cleanup(func() {
 		cancel()

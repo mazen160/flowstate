@@ -23,6 +23,7 @@ import (
 	"net/http"
 	"os"
 	"strconv"
+	"sync"
 	"time"
 
 	"github.com/mazin-ahmed/flowstate/internal/cleanup"
@@ -80,6 +81,14 @@ type Server struct {
 	opts    Options
 	mux     *http.ServeMux
 	handler http.Handler // mux wrapped in any global middleware
+
+	// readyOnce guards a single close of ready + write of resolvedAddr.
+	// ready closes once the listener has bound; WaitReady selects on it
+	// to unblock callers that need the resolved address (e.g. tests
+	// using ListenPort=0 to pick a random port).
+	readyOnce    sync.Once
+	ready        chan struct{}
+	resolvedAddr string
 }
 
 // New wires the routes (assets + JSON API) into a freshly-allocated
@@ -89,7 +98,10 @@ func New(opts Options) *Server {
 		opts.Stderr = os.Stderr
 	}
 
-	s := &Server{opts: opts}
+	s := &Server{
+		opts:  opts,
+		ready: make(chan struct{}),
+	}
 	mux := http.NewServeMux()
 	s.registerRoutes(mux)
 	s.mux = mux
@@ -99,6 +111,39 @@ func New(opts Options) *Server {
 	// gzip middleware without disturbing the route table below.
 	s.handler = mux
 	return s
+}
+
+// markReady is called exactly once by ListenAndServe after net.Listen
+// succeeds. Stores the resolved address (so a ListenPort=0 caller can
+// discover the real port) and closes ready so WaitReady can return.
+//
+// Wrapped in sync.Once because a second ListenAndServe call on the same
+// Server is unsupported — we don't try to support recycling — and the
+// once guard turns "called twice by mistake" from a panic into a no-op.
+func (s *Server) markReady(addr string) {
+	s.readyOnce.Do(func() {
+		s.resolvedAddr = addr
+		close(s.ready)
+	})
+}
+
+// WaitReady blocks until ListenAndServe has bound a listener (so the
+// resolved address is stable), or until ctx is cancelled. Returns the
+// resolved "host:port" string.
+//
+// Tests should prefer WaitReady over polling: the previous polling
+// pattern read a field that ListenAndServe was concurrently writing,
+// which the race detector correctly flagged.
+func (s *Server) WaitReady(ctx context.Context) (string, error) {
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	select {
+	case <-s.ready:
+		return s.resolvedAddr, nil
+	case <-ctx.Done():
+		return "", ctx.Err()
+	}
 }
 
 // registerRoutes wires every URL handled by the server. Asset routes go
@@ -118,10 +163,27 @@ func (s *Server) registerRoutes(mux *http.ServeMux) {
 	mux.Handle("/api/transcribe", s.authMiddleware(http.HandlerFunc(s.handleTranscribe)))
 }
 
-// Addr returns the host:port string the server will (or did) bind to.
-// Exposed for tests and the CLI startup banner.
+// Addr returns the host:port string the server is bound to. Before the
+// listener is up it returns the configured Host:Port; once
+// ListenAndServe has bound (and markReady has run), it returns the
+// resolved address — important when the caller passed ListenPort=0
+// and wants the real port the kernel picked.
+//
+// The select on s.ready is non-blocking via the default case so this
+// can be called from the pre-bind goroutine without deadlocking.
 func (s *Server) Addr() string {
-	return net.JoinHostPort(s.opts.ListenHost, strconv.Itoa(s.opts.ListenPort))
+	select {
+	case <-s.ready:
+		// Listener is up — resolvedAddr is stable (set under
+		// readyOnce before close) so reading it here is race-free.
+		return s.resolvedAddr
+	default:
+		// Pre-bind: synthesize from the configured Options. This
+		// is what http.Server.Addr originally consumed; the value
+		// may have ListenPort=0 in which case the real port is
+		// only knowable after WaitReady returns.
+		return net.JoinHostPort(s.opts.ListenHost, strconv.Itoa(s.opts.ListenPort))
+	}
 }
 
 // ListenAndServe starts the HTTP server and blocks until ctx is cancelled
@@ -152,11 +214,14 @@ func (s *Server) ListenAndServe(ctx context.Context) error {
 		return fmt.Errorf("listen %s: %w", hs.Addr, err)
 	}
 
-	// Capture the resolved port back onto opts so a caller binding to
-	// :0 (random port) can still print the real URL.
-	if tcpAddr, ok := listener.Addr().(*net.TCPAddr); ok {
-		s.opts.ListenPort = tcpAddr.Port
-	}
+	// Signal that the listener is up. markReady stores the resolved
+	// address under sync.Once and closes the ready channel so WaitReady
+	// (and a non-blocking Addr() probe) can unblock. Note that we do
+	// NOT mutate s.opts.ListenPort here — opts is the caller's view of
+	// the requested configuration and must stay read-only after New.
+	// The race detector flagged the previous in-place write because
+	// tests polled opts.ListenPort from another goroutine.
+	s.markReady(listener.Addr().String())
 
 	// Serve in a goroutine so the main routine can watch ctx.
 	serveErr := make(chan error, 1)
