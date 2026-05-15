@@ -9,8 +9,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/mazin-ahmed/flowstate/internal/config"
-	"github.com/mazin-ahmed/flowstate/internal/ui"
+	"github.com/mazen160/flowstate/internal/config"
+	"github.com/mazen160/flowstate/internal/ui"
 )
 
 // TestVersionSubcommand drives runVersion against a bytes.Buffer and asserts

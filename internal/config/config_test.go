@@ -8,7 +8,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/mazin-ahmed/flowstate/internal/prompts"
+	"github.com/mazen160/flowstate/internal/prompts"
 )
 
 // TestDefaultPath_Platform asserts the host-OS default path looks roughly

@@ -4,7 +4,7 @@ import (
 	"flag"
 	"io"
 
-	"github.com/mazin-ahmed/flowstate/internal/config"
+	"github.com/mazen160/flowstate/internal/config"
 )
 
 // recordFlags is the parsed CLI flags for the default record command. Each

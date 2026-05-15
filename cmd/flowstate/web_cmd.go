@@ -14,11 +14,11 @@ import (
 	"runtime"
 	"syscall"
 
-	"github.com/mazin-ahmed/flowstate/internal/cleanup"
-	"github.com/mazin-ahmed/flowstate/internal/config"
-	"github.com/mazin-ahmed/flowstate/internal/prompts"
-	"github.com/mazin-ahmed/flowstate/internal/server"
-	"github.com/mazin-ahmed/flowstate/internal/transcribe"
+	"github.com/mazen160/flowstate/internal/cleanup"
+	"github.com/mazen160/flowstate/internal/config"
+	"github.com/mazen160/flowstate/internal/prompts"
+	"github.com/mazen160/flowstate/internal/server"
+	"github.com/mazen160/flowstate/internal/transcribe"
 )
 
 // runWeb implements the `flowstate web` subcommand. It parses its three

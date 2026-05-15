@@ -26,8 +26,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/mazin-ahmed/flowstate/internal/cleanup"
-	"github.com/mazin-ahmed/flowstate/internal/transcribe"
+	"github.com/mazen160/flowstate/internal/cleanup"
+	"github.com/mazen160/flowstate/internal/transcribe"
 )
 
 // shutdownTimeout is how long ListenAndServe waits for in-flight requests

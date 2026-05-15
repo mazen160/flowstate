@@ -9,15 +9,15 @@ import (
 	"os"
 	"time"
 
-	"github.com/mazin-ahmed/flowstate/internal/audio"
-	"github.com/mazin-ahmed/flowstate/internal/cleanup"
-	"github.com/mazin-ahmed/flowstate/internal/config"
-	"github.com/mazin-ahmed/flowstate/internal/mute"
-	"github.com/mazin-ahmed/flowstate/internal/output"
-	"github.com/mazin-ahmed/flowstate/internal/prompts"
-	"github.com/mazin-ahmed/flowstate/internal/transcribe"
-	"github.com/mazin-ahmed/flowstate/internal/trigger"
-	"github.com/mazin-ahmed/flowstate/internal/ui"
+	"github.com/mazen160/flowstate/internal/audio"
+	"github.com/mazen160/flowstate/internal/cleanup"
+	"github.com/mazen160/flowstate/internal/config"
+	"github.com/mazen160/flowstate/internal/mute"
+	"github.com/mazen160/flowstate/internal/output"
+	"github.com/mazen160/flowstate/internal/prompts"
+	"github.com/mazen160/flowstate/internal/transcribe"
+	"github.com/mazen160/flowstate/internal/trigger"
+	"github.com/mazen160/flowstate/internal/ui"
 )
 
 // resolveColorMode collapses the four color inputs into a single

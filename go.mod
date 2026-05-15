@@ -1,4 +1,4 @@
-module github.com/mazin-ahmed/flowstate
+module github.com/mazen160/flowstate
 
 go 1.24
 

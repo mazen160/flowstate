@@ -67,7 +67,7 @@ checksum:
 
 release:
   github:
-    owner: mazin-ahmed
+    owner: mazen160
     name: flowstate
   name_template: "v{{ .Version }}"
   draft: true

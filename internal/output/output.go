@@ -23,7 +23,7 @@ import (
 
 	"golang.design/x/clipboard"
 
-	"github.com/mazin-ahmed/flowstate/internal/paste"
+	"github.com/mazen160/flowstate/internal/paste"
 )
 
 // Destinations is the boolean triple parsed out of the comma-separated

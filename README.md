@@ -132,7 +132,7 @@ The pipeline is shared between the CLI (`flowstate`) and the web server (`flowst
 The fastest path on every platform, one command, one binary, both interfaces:
 
 ```sh
-go install github.com/mazin-ahmed/flowstate/cmd/flowstate@latest
+go install github.com/mazen160/flowstate/cmd/flowstate@latest
 ```
 
 That gives you `flowstate` (CLI) and `flowstate web` (the local browser UI) in the same executable.
@@ -146,7 +146,7 @@ Install Xcode command-line tools, then `go install`:
 
 ```sh
 xcode-select --install
-go install github.com/mazin-ahmed/flowstate/cmd/flowstate@latest
+go install github.com/mazen160/flowstate/cmd/flowstate@latest
 ```
 
 The first time you use `paste` or `push-to-talk`, the OS will prompt you to add Accessibility permission for the terminal application running flowstate (Terminal, iTerm2, etc.) under **System Settings → Privacy & Security → Accessibility**.
@@ -172,7 +172,7 @@ sudo apt-get install -y \
     libasound2-dev \
     libx11-dev libxkbcommon-dev libxtst-dev libxinerama-dev libxrandr-dev \
     pulseaudio-utils alsa-utils
-go install github.com/mazin-ahmed/flowstate/cmd/flowstate@latest
+go install github.com/mazen160/flowstate/cmd/flowstate@latest
 ```
 
 For `output_mode = paste` on Wayland, install `wtype`. On X11, `xdotool` is the fallback.
@@ -185,7 +185,7 @@ For `output_mode = paste` on Wayland, install `wtype`. On X11, `xdotool` is the 
 Install Go (which ships with a working C toolchain), then:
 
 ```powershell
-go install github.com/mazin-ahmed/flowstate/cmd/flowstate@latest
+go install github.com/mazen160/flowstate/cmd/flowstate@latest
 ```
 
 Audio capture (WASAPI), `mute_while_recording`, paste (`SendInput`), and push-to-talk all work without extra permissions.

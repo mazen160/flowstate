@@ -14,8 +14,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/mazin-ahmed/flowstate/internal/cleanup"
-	"github.com/mazin-ahmed/flowstate/internal/transcribe"
+	"github.com/mazen160/flowstate/internal/cleanup"
+	"github.com/mazen160/flowstate/internal/transcribe"
 )
 
 // fakeGroq returns an httptest.Server that mimics the two Groq endpoints

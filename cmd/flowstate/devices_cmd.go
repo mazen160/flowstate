@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"io"
 
-	"github.com/mazin-ahmed/flowstate/internal/audio"
+	"github.com/mazen160/flowstate/internal/audio"
 )
 
 // runDevices implements `flowstate devices`. It enumerates input devices via

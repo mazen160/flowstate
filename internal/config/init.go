@@ -8,7 +8,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/mazin-ahmed/flowstate/internal/prompts"
+	"github.com/mazen160/flowstate/internal/prompts"
 )
 
 // configTemplate is the canonical default config body. The three

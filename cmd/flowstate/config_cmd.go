@@ -7,7 +7,7 @@ import (
 	"io"
 	"os"
 
-	"github.com/mazin-ahmed/flowstate/internal/config"
+	"github.com/mazen160/flowstate/internal/config"
 )
 
 // runConfig dispatches `flowstate config <sub>` to its handler. Returns

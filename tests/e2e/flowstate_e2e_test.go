@@ -14,8 +14,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/mazin-ahmed/flowstate/internal/cleanup"
-	"github.com/mazin-ahmed/flowstate/internal/transcribe"
+	"github.com/mazen160/flowstate/internal/cleanup"
+	"github.com/mazen160/flowstate/internal/transcribe"
 )
 
 // TestFlowstateE2E_CLISurface builds the flowstate binary and exercises its
@@ -251,7 +251,7 @@ func buildBinary(t *testing.T) string {
 
 	// We build from the package path, not from a hard-coded relative dir,
 	// so the test works regardless of where `go test` is invoked from.
-	cmd := exec.Command("go", "build", "-o", out, "github.com/mazin-ahmed/flowstate/cmd/flowstate")
+	cmd := exec.Command("go", "build", "-o", out, "github.com/mazen160/flowstate/cmd/flowstate")
 	combined, err := cmd.CombinedOutput()
 	if err != nil {
 		t.Fatalf("go build failed: %v\n%s", err, combined)
