@@ -49,7 +49,8 @@ jobs:
             libx11-xcb-dev \
             libxt-dev \
             pulseaudio-utils \
-            alsa-utils
+            alsa-utils \
+            xvfb
 
       - name: Download modules
         run: go mod download
@@ -57,5 +58,17 @@ jobs:
       - name: Vet
         run: go vet ./...
 
-      - name: Test
+      # gohook's libuiohook calls XOpenDisplay() at C-library load time.
+      # On Linux that's lazy: the test binary doesn't crash until the
+      # gohook init runs, which is on first import of internal/trigger.
+      # The headless GitHub runner has no $DISPLAY, so we wrap the test
+      # process in xvfb-run to give it a throwaway virtual X server.
+      # macOS and Windows runners have working display layers and don't
+      # need the wrapper.
+      - name: Test (Linux, under Xvfb)
+        if: runner.os == 'Linux'
+        run: xvfb-run -a go test ./... -timeout 120s -race
+
+      - name: Test (macOS / Windows)
+        if: runner.os != 'Linux'
         run: go test ./... -timeout 120s -race
