@@ -37,6 +37,11 @@
     } catch (e) { S.sessions = []; }
     S.currentSessionId = localStorage.getItem('flowstate.currentSessionId') || null;
     S.token = localStorage.getItem('flowstate.token') || '';
+    // Auto-copy preference. Default off so the first run doesn't surprise
+    // the user by stomping their clipboard. Stored as the literal string
+    // "1" / "0" rather than JSON so this single-bit setting reads cleanly
+    // in the browser's storage inspector.
+    S.autoCopy = localStorage.getItem('flowstate.autoCopy') === '1';
     if (!Array.isArray(S.sessions)) S.sessions = [];
   }
 
@@ -51,6 +56,7 @@
       } else {
         localStorage.removeItem('flowstate.token');
       }
+      localStorage.setItem('flowstate.autoCopy', S.autoCopy ? '1' : '0');
     } catch (e) { /* quota or private-mode — best effort */ }
   }
 
@@ -193,6 +199,35 @@
         done(legacyCopy(text));
       }
     });
+  }
+
+  // autoCopyToClipboard runs the same writeText → legacyCopy fallback as
+  // the manual Copy buttons, but with no DOM button to flash. Success
+  // flashes a brief "Copied to clipboard" status on the recorder hint;
+  // failure is silent (we don't want a noisy error every time the
+  // browser denies clipboard access).
+  function autoCopyToClipboard(text) {
+    var statusEl = $('rec-status');
+    var show = function (ok) {
+      if (!ok || !statusEl) return;
+      statusEl.textContent = '✓ Copied to clipboard';
+      // Reset after a moment so the next recording sees a clean status.
+      // The whole notification is best-effort — no need to clear a prior
+      // timer; the final value will resolve to "" within ~1.4s.
+      setTimeout(function () {
+        if (statusEl.textContent === '✓ Copied to clipboard') {
+          statusEl.textContent = '';
+        }
+      }, 1400);
+    };
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(text).then(
+        function () { show(true); },
+        function () { show(legacyCopy(text)); }
+      );
+    } else {
+      show(legacyCopy(text));
+    }
   }
 
   // legacyCopy uses the deprecated execCommand path as a last-resort
@@ -433,6 +468,13 @@
       rerender();
       setRecState('idle');
       $('rec-status').textContent = '';
+      // Auto-copy the cleaned text if the user opted in. Uses the same
+      // clipboard path as the manual Copy buttons (Promise → fallback)
+      // and flashes a small status hint instead of taking over a button,
+      // since no specific button is "the" target here.
+      if (S.autoCopy && item.cleaned) {
+        autoCopyToClipboard(item.cleaned);
+      }
     } catch (e) {
       setRecState('idle');
       $('rec-status').textContent = 'Upload failed: ' + (e && e.message ? e.message : e);
@@ -565,6 +607,16 @@
       persist();
       rerender();
     });
+    // Auto-copy toggle. Initialize from the loaded S.autoCopy so the
+    // checkbox state survives a page reload.
+    var autoCopyBox = $('auto-copy');
+    if (autoCopyBox) {
+      autoCopyBox.checked = !!S.autoCopy;
+      autoCopyBox.addEventListener('change', function () {
+        S.autoCopy = this.checked;
+        persist();
+      });
+    }
     // Clear-local-data button. Confirms first since this wipes every
     // session, transcript, and the saved token. After clearing we reload
     // the page so the in-memory state restarts cleanly without us having
@@ -582,6 +634,7 @@
           localStorage.removeItem('flowstate.sessions');
           localStorage.removeItem('flowstate.currentSessionId');
           localStorage.removeItem('flowstate.token');
+          localStorage.removeItem('flowstate.autoCopy');
         } catch (e) { /* ignore quota / disabled storage errors */ }
         location.reload();
       });

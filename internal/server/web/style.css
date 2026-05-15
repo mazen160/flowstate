@@ -515,6 +515,41 @@ kbd {
   border-color: var(--focus);
   background: var(--surface);
 }
+/* Single-row toggle setting: native checkbox + label rows.
+   Spans the full width so the description has room to breathe. */
+.toggle-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  margin-top: 16px;
+  padding: 12px 14px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: var(--surface-2);
+  cursor: pointer;
+  transition: border-color 120ms ease;
+}
+.toggle-row:hover { border-color: var(--line-2); }
+.toggle-row input[type="checkbox"] {
+  margin: 2px 0 0;
+  width: 16px;
+  height: 16px;
+  accent-color: var(--focus);
+  cursor: pointer;
+  flex-shrink: 0;
+}
+.toggle-text { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+.toggle-title {
+  font-size: 13px;
+  color: var(--text);
+  font-weight: 500;
+}
+.toggle-desc {
+  font-size: 12px;
+  color: var(--text-3);
+  line-height: 1.45;
+}
+
 .version-line {
   margin: 14px 0 0;
   font: 11px/1.4 ui-monospace, "SF Mono", Menlo, Consolas, monospace;
