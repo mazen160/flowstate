@@ -9,7 +9,9 @@ import (
 	"net"
 	"net/http"
 	"os"
+	"os/exec"
 	"os/signal"
+	"runtime"
 	"syscall"
 
 	"github.com/mazin-ahmed/flowstate/internal/cleanup"
@@ -36,6 +38,7 @@ func runWeb(ctx context.Context, args []string, stderr io.Writer) int {
 		listenPort int
 		token      string
 		configPath string
+		noBrowser  bool
 	)
 	fs.StringVar(&listenHost, "web-interface-listen", "127.0.0.1",
 		"Interface to bind (default 127.0.0.1).")
@@ -45,6 +48,8 @@ func runWeb(ctx context.Context, args []string, stderr io.Writer) int {
 		"Optional Bearer auth token. Required only if set; FLOWSTATE_WEB_TOKEN env var is the fallback.")
 	fs.StringVar(&configPath, "config", "",
 		"Path to config file (overrides $FLOWSTATE_CONFIG).")
+	fs.BoolVar(&noBrowser, "no-browser", false,
+		"Don't open a browser tab on startup. Default is to open the UI automatically.")
 
 	if err := fs.Parse(args); err != nil {
 		if errors.Is(err, flag.ErrHelp) {
@@ -112,9 +117,9 @@ func runWeb(ctx context.Context, args []string, stderr io.Writer) int {
 		FallbackModel: cfg.CleanupFallbackModel,
 	})
 
-	// 7. Resolve the active system prompt and apply the same the upstream reference-
-	//    parity augmentations as record.go (output language directive +
-	//    high-priority vocabulary block).
+	// 7. Resolve the active system prompt and apply the same augmentations
+	//    record.go uses (output language directive + high-priority
+	//    vocabulary block), so wire behavior matches between CLI and web.
 	systemPrompt, ok := cfg.Prompts[cfg.ActivePrompt]
 	if !ok {
 		fmt.Fprintf(stderr, "active_prompt %q has no body under [prompts]\n", cfg.ActivePrompt)
@@ -144,11 +149,73 @@ func runWeb(ctx context.Context, args []string, stderr io.Writer) int {
 	sigCtx, stop := signal.NotifyContext(ctx, os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
+	// 10. Auto-open the browser (unless --no-browser). Done in a
+	//     goroutine that waits on srv.WaitReady so we don't fire the
+	//     OS open command at a URL that isn't accepting connections
+	//     yet — that would race a fast browser against the listener's
+	//     bind syscall and sometimes land "connection refused". The
+	//     goroutine exits cleanly on ctx cancel if the user Ctrl+Cs
+	//     before WaitReady returns. Open errors are logged but never
+	//     fatal: a user with no default browser or a sandboxed env
+	//     still gets a working server.
+	if !noBrowser {
+		go func() {
+			addr, err := srv.WaitReady(sigCtx)
+			if err != nil {
+				return // ctx cancelled before bind — server is exiting anyway.
+			}
+			url := "http://" + addr
+			if oerr := openBrowser(url); oerr != nil {
+				fmt.Fprintf(stderr, "could not open browser automatically (%v); visit %s manually\n", oerr, url)
+			}
+		}()
+	}
+
 	if err := srv.ListenAndServe(sigCtx); err != nil && !errors.Is(err, http.ErrServerClosed) {
 		fmt.Fprintln(stderr, err)
 		return 1
 	}
 	return 0
+}
+
+// openBrowser launches the system default browser at url. Per-OS via
+// exec.LookPath + exec.Command — no third-party dep. The command is
+// fire-and-forget: we return after Start returns, which means the
+// browser launch itself may still be in progress; that's fine because
+// the calling goroutine has no further work and the server is already
+// accepting connections.
+//
+// Failure modes (return non-nil):
+//   - The expected per-OS opener binary isn't on PATH (e.g. xdg-open
+//     not installed on a minimal Linux box).
+//   - exec.Start fails (rare).
+//
+// On a headless / no-display environment the opener typically still
+// starts (xdg-open exits 0 even without a $DISPLAY on some distros)
+// but no window appears. That's not an error from our side; the user
+// can fall back to the printed URL.
+func openBrowser(url string) error {
+	switch runtime.GOOS {
+	case "darwin":
+		return exec.Command("open", url).Start()
+	case "windows":
+		// rundll32 url.dll,FileProtocolHandler is the documented
+		// "shell open" entry point; works on every Windows version
+		// flowstate supports without depending on `start` being a
+		// real binary (it's a cmd.exe builtin).
+		return exec.Command("rundll32", "url.dll,FileProtocolHandler", url).Start()
+	default:
+		// Linux + BSD + everything Unix-y. xdg-open is the de-facto
+		// standard; sensible-browser is the Debian alias when xdg-open
+		// isn't installed. We try both before giving up.
+		if _, err := exec.LookPath("xdg-open"); err == nil {
+			return exec.Command("xdg-open", url).Start()
+		}
+		if _, err := exec.LookPath("sensible-browser"); err == nil {
+			return exec.Command("sensible-browser", url).Start()
+		}
+		return fmt.Errorf("no opener found (xdg-open / sensible-browser); set up one in your distro to enable auto-open")
+	}
 }
 
 // isLoopbackHost returns true if the given host string designates the

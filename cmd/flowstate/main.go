@@ -59,12 +59,18 @@ Record flags:
   --paste-delay <seconds>  Wait N seconds between clipboard seed and the
                            paste keystroke. Gives you time to focus the
                            destination window. 0 = immediate (default).
+  --silent                 Suppress all stderr (status, warnings, errors).
+                           Only the cleaned transcript prints to stdout;
+                           use the exit code to detect failure.
 
 Web flags (use with: flowstate web):
   --web-interface-listen <host>  Interface to bind (default 127.0.0.1).
   --web-port <port>              TCP port to listen on (default 8585).
   --web-token <token>            Optional Bearer auth token. Empty = no auth.
                                  FLOWSTATE_WEB_TOKEN env var is the fallback.
+  --no-browser                   Don't open a browser tab on startup.
+                                 By default, ` + "`flowstate web`" + ` opens the UI
+                                 automatically once the listener is ready.
 `
 
 func main() {

@@ -6,6 +6,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- `--silent` flag on the record command. Suppresses every stderr message
+  (status, warnings, errors) so a `flowstate --silent | pbcopy` pipeline
+  yields exactly the cleaned transcript on stdout and nothing else. Exit
+  code still signals success vs failure (0 / 1 / 2).
+- `flowstate web` now opens the UI in your default browser automatically
+  once the listener is bound. `--no-browser` opts out and reverts to the
+  previous "print the URL and wait" behavior. The open command is per-OS
+  (`open` on macOS, `rundll32 url.dll,FileProtocolHandler` on Windows,
+  `xdg-open` with a `sensible-browser` fallback on Linux).
+
 ## [1.0.0] — 2026-05-15
 
 ### Added

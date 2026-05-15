@@ -145,6 +145,41 @@ func TestApplyFlags_MaxTimeUnset(t *testing.T) {
 	}
 }
 
+// TestSilentFlag_DiscardsStderr drives the run() entrypoint with --silent
+// against an args list that's guaranteed to fail fast (no config file
+// present, since we override FLOWSTATE_CONFIG to a tempdir path that
+// doesn't exist). With --silent, stderr must be empty; without it, the
+// pre-reporter "no config found" error message must surface.
+func TestSilentFlag_DiscardsStderr(t *testing.T) {
+	missing := filepath.Join(t.TempDir(), "absent.toml")
+	t.Setenv(config.EnvVar, missing)
+
+	t.Run("with --silent: stderr empty, exit code still 1", func(t *testing.T) {
+		var stdout, stderr bytes.Buffer
+		code := run([]string{"--silent"}, strings.NewReader(""), &stdout, &stderr)
+		if code != 1 {
+			t.Errorf("exit code = %d, want 1", code)
+		}
+		if stderr.Len() != 0 {
+			t.Errorf("stderr should be empty with --silent, got: %q", stderr.String())
+		}
+		if stdout.Len() != 0 {
+			t.Errorf("stdout should be empty too on the missing-config error path, got: %q", stdout.String())
+		}
+	})
+
+	t.Run("without --silent: stderr carries the friendly error", func(t *testing.T) {
+		var stdout, stderr bytes.Buffer
+		code := run([]string{}, strings.NewReader(""), &stdout, &stderr)
+		if code != 1 {
+			t.Errorf("exit code = %d, want 1", code)
+		}
+		if !strings.Contains(stderr.String(), "no config found") {
+			t.Errorf("expected 'no config found' on stderr, got: %q", stderr.String())
+		}
+	})
+}
+
 // TestApplyFlags_PasteDelay wires --paste-delay=3 through to
 // PasteDelaySeconds. Behavior of the delay itself (sleeping before the
 // paste keystroke) is verified at the output-package level.

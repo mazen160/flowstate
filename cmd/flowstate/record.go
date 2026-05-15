@@ -70,6 +70,19 @@ func runRecord(ctx context.Context, args []string, stdin io.Reader, stdout, stde
 	}
 	rf.captureSetFlags(fs)
 
+	// --silent: redirect every stderr-bound writer to io.Discard before
+	// the first message can be emitted. The Reporter, pre-reporter
+	// fmt.Fprintf error paths, runCapture, output.WriteWithStdout —
+	// everything that takes `stderr` as an argument inherits the
+	// discard. stdout still receives the cleaned transcript so a
+	// `flowstate --silent | pbcopy` pipeline gets only the text. Errors
+	// are silent too; callers check the exit code (0 = success, 1 = any
+	// user-visible failure, 2 = flag parse). This is the Unix-y "be
+	// pipeable; don't editorialize" mode.
+	if rf.silent {
+		stderr = io.Discard
+	}
+
 	// 1. Resolve and load config. If the file is absent and the user is
 	//    running the default command, that's a first-run; point them at
 	//    `flowstate config init` rather than failing with a raw fs error.

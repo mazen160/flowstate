@@ -24,6 +24,7 @@ type recordFlags struct {
 	noColor    bool
 	maxTime    int
 	pasteDelay int
+	silent     bool
 
 	// wavSource is a HIDDEN test affordance. When set to a non-empty path,
 	// runRecord skips the audio capture step entirely and uses that WAV
@@ -60,6 +61,7 @@ func newRecordFlagSet(stderr io.Writer) (*flag.FlagSet, *recordFlags) {
 	fs.BoolVar(&rf.noColor, "no-color", false, "Disable ANSI colors in status output (equivalent to colors=\"never\").")
 	fs.IntVar(&rf.maxTime, "max-time", 0, "Auto-stop recording after N seconds and process. 0 disables (default).")
 	fs.IntVar(&rf.pasteDelay, "paste-delay", 0, "Wait N seconds between clipboard seed and paste keystroke. 0 = immediate (default).")
+	fs.BoolVar(&rf.silent, "silent", false, "Suppress all stderr output. Only the cleaned transcript prints (to stdout); errors are silent — check the exit code instead.")
 	// --wav-source is a hidden test affordance. Registered with the
 	// flag set so Parse accepts it, but absent from helpText so users
 	// don't accidentally discover it. The fact-finding test under
