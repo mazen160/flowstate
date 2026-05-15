@@ -16,6 +16,8 @@ coverage.out
 # Local agent / workspace state (not source)
 .claude/
 .backlog/
+docs/LAUNCH.md
+docs/RELEASING.md
 
 # Local reference clones — not part of this project
 tests/freeflow/

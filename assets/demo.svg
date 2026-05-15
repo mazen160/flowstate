@@ -1,5 +1,5 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 880 500" role="img" aria-label="flowstate terminal demo">
-  <title>flowstate  speak, clean, ship</title>
+  <title>flowstate -- speak, clean, ship</title>
   <desc>Animated terminal session showing flowstate recording, transcribing, cleaning up, and printing the cleaned text.</desc>
 
   <defs>
@@ -7,10 +7,6 @@
       <stop offset="0%"  stop-color="#22d3ee"/>
       <stop offset="55%" stop-color="#a855f7"/>
       <stop offset="100%" stop-color="#f472b6"/>
-    </linearGradient>
-    <linearGradient id="winShadow" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0%" stop-color="#000" stop-opacity="0.45"/>
-      <stop offset="100%" stop-color="#000" stop-opacity="0"/>
     </linearGradient>
     <style>
       .mono { font-family: 'JetBrains Mono','SF Mono','Menlo','DejaVu Sans Mono',ui-monospace,monospace; font-size: 16px; }
@@ -20,10 +16,8 @@
       .magenta { fill: #f472b6; }
       .cyan    { fill: #22d3ee; }
       .green   { fill: #4ade80; }
-      .gold    { fill: #fbbf24; }
       .bar     { fill: url(#meter); }
       .caret   { fill: #f8fafc; }
-      .hidden  { opacity: 0; }
     </style>
   </defs>
 
@@ -34,7 +28,7 @@
   <circle cx="20" cy="16" r="6" fill="#ef4444"/>
   <circle cx="40" cy="16" r="6" fill="#f59e0b"/>
   <circle cx="60" cy="16" r="6" fill="#10b981"/>
-  <text class="mono" x="440" y="20" text-anchor="middle" fill="#94a3b8" font-size="12">flowstate  Think out loud. Ship in text.</text>
+  <text class="mono" x="440" y="20" text-anchor="middle" fill="#94a3b8" font-size="12">flowstate -- Think out loud. Ship in text.</text>
 
   <!-- Prompt line: $ flowstate -->
   <g transform="translate(24,72)">
@@ -42,13 +36,15 @@
     <text class="mono text" x="20" y="0">flowstate</text>
   </g>
 
-  <!-- Recording line. Bars animate, text + dot fade in. -->
+  <!-- Recording phase: status dot + label + live mic meter -->
   <g transform="translate(24,108)">
-    <text class="mono magenta" x="0" y="0">Ï</text>
-    <text class="mono text"    x="20" y="0">Recording</text>
+    <!-- Status dot rendered as an SVG circle so we never depend on the
+         BLACK CIRCLE glyph (U+25CF) being available or correctly encoded. -->
+    <circle cx="6" cy="-5" r="6" class="magenta" fill="#f472b6"/>
+    <text class="mono text" x="22" y="0">Recording</text>
 
     <!-- Live mic meter: 7 bars whose heights pulse independently -->
-    <g transform="translate(135,-12)">
+    <g transform="translate(140,-12)">
       <rect class="bar" x="0"  y="6"  width="6" height="6"  rx="1.5">
         <animate attributeName="height" values="3;14;6;10;4;12;5"  dur="0.9s" repeatCount="6"/>
         <animate attributeName="y"      values="9;-2;6;2;8;0;7"    dur="0.9s" repeatCount="6"/>
@@ -79,28 +75,28 @@
       </rect>
     </g>
 
-    <text class="mono dim" x="220" y="0"> press Enter to stop</text>
+    <text class="mono dim" x="225" y="0">-- press Enter to stop</text>
   </g>
 
-  <!-- Phase 2: Transcribing& (fades in after recording phase) -->
+  <!-- Phase 2: Transcribing... (fades in after recording phase) -->
   <g transform="translate(24,144)" opacity="0">
-    <text class="mono cyan" x="0" y="0">Ï</text>
-    <text class="mono text" x="20" y="0">Transcribing&</text>
+    <circle cx="6" cy="-5" r="6" fill="#22d3ee"/>
+    <text class="mono text" x="22" y="0">Transcribing...</text>
     <animate attributeName="opacity" values="0;0;1;1" keyTimes="0;0.62;0.66;1" dur="9s" repeatCount="indefinite"/>
   </g>
 
-  <!-- Phase 3: Cleaning up& -->
+  <!-- Phase 3: Cleaning up... -->
   <g transform="translate(24,180)" opacity="0">
-    <text class="mono cyan" x="0" y="0">Ï</text>
-    <text class="mono text" x="20" y="0">Cleaning up&</text>
+    <circle cx="6" cy="-5" r="6" fill="#22d3ee"/>
+    <text class="mono text" x="22" y="0">Cleaning up...</text>
     <animate attributeName="opacity" values="0;0;1;1" keyTimes="0;0.74;0.78;1" dur="9s" repeatCount="indefinite"/>
   </g>
 
-  <!-- Phase 4: Done. -->
+  <!-- Phase 4: Done. (a checkmark drawn as a path, not a glyph) -->
   <g transform="translate(24,216)" opacity="0">
-    <text class="mono green" x="0" y="0"></text>
-    <text class="mono text"  x="20" y="0">Done.</text>
-    <text class="mono dim"   x="80" y="0">(94 characters, 1.8s)</text>
+    <path d="M 0 -6 L 5 0 L 14 -10" stroke="#4ade80" stroke-width="2.5" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+    <text class="mono text" x="22" y="0">Done.</text>
+    <text class="mono dim"  x="82" y="0">(94 characters, 1.8s)</text>
     <animate attributeName="opacity" values="0;0;1;1" keyTimes="0;0.84;0.88;1" dur="9s" repeatCount="indefinite"/>
   </g>
 
@@ -119,17 +115,19 @@
              dur="9s" repeatCount="indefinite"/>
   </rect>
 
-  <!-- Bottom hint pill -->
+  <!-- Bottom hint pills. Width is set wide enough for the JetBrains Mono
+       glyph metrics of "Speak  /  Clean  /  Ship" so the text doesn't
+       overflow into the next pill. -->
   <g transform="translate(24,452)">
-    <rect x="0"   y="0" width="120" height="26" rx="13" fill="#1e293b" stroke="#334155" stroke-width="1"/>
-    <text class="mono" x="14" y="17" font-size="12" fill="#94a3b8">Speak  ·  Clean  ·  Ship</text>
+    <rect x="0" y="0" width="232" height="26" rx="13" fill="#1e293b" stroke="#334155" stroke-width="1"/>
+    <text class="mono" x="14" y="17" font-size="12" fill="#94a3b8">Speak  /  Clean  /  Ship</text>
 
-    <text class="mono dim" x="140" y="17" font-size="12">stdout · clipboard · paste</text>
+    <text class="mono dim" x="252" y="17" font-size="12">stdout / clipboard / paste</text>
   </g>
 
   <!-- Subtle scanline texture for terminal feel -->
   <g opacity="0.04">
-    <rect x="0" y="40" width="880" height="1" fill="#22d3ee"/>
+    <rect x="0" y="40"  width="880" height="1" fill="#22d3ee"/>
     <rect x="0" y="100" width="880" height="1" fill="#22d3ee"/>
     <rect x="0" y="200" width="880" height="1" fill="#22d3ee"/>
     <rect x="0" y="300" width="880" height="1" fill="#22d3ee"/>

@@ -427,16 +427,16 @@ flowstate 2>/dev/null          # suppress all status; transcript only
 
 ## How it compares
 
-|                          | **flowstate**                | Wispr Flow              | Superwhisper          | whisper.cpp                |
-|--------------------------|------------------------------|--------------------------|-----------------------|----------------------------|
-| Mac / Linux / Windows    | Yes                          | Mac / Win / mobile       | Mac only              | Mac / Linux / Windows      |
-| Terminal-native CLI      | Yes — pipe-friendly          | No (menu-bar app)        | No (menu-bar app)     | Yes — but lower-level      |
-| Local web UI             | Yes — `flowstate web`        | No                       | No                    | No                         |
-| LLM cleanup pass         | Yes — Groq                   | Yes — proprietary        | Yes — proprietary     | No (raw transcription)     |
-| BYO API key              | Yes — Groq                   | Subscription             | One-time license      | n/a (local)                |
-| Network required         | Yes — Groq API               | Yes                      | No (local)            | No (local)                 |
-| Cost                     | Free + Groq API usage        | Subscription             | One-time license      | Free                       |
-| Best for                 | Devs who live in the terminal *and* the browser | Knowledge workers | Privacy-first dictators | Hackers and researchers |
+|                          | **flowstate**                                   | Wispr Flow         | Superwhisper            |
+|--------------------------|-------------------------------------------------|--------------------|-------------------------|
+| Mac / Linux / Windows    | Yes                                             | Mac / Win / mobile | Mac only                |
+| Terminal-native CLI      | Yes — pipe-friendly                             | No (menu-bar app)  | No (menu-bar app)       |
+| Local web UI             | Yes — `flowstate web`                           | No                 | No                      |
+| LLM cleanup pass         | Yes — Groq                                      | Yes — proprietary  | Yes — proprietary       |
+| BYO API key              | Yes — Groq                                      | Subscription       | One-time license        |
+| Network required         | Yes — Groq API                                  | Yes                | No (local)              |
+| Cost                     | Free + Groq API usage                           | Subscription       | One-time license        |
+| Best for                 | Devs who live in the terminal *and* the browser | Knowledge workers  | Privacy-first dictators |
 
 flowstate is the one that's all of: cross-platform, terminal-native, **with a self-hosted browser UI**, LLM-cleaned, BYO key, and free. Pick whichever matches how you work.
 
