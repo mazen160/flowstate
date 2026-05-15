@@ -1,0 +1,96 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: Build (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: "1.24"
+          cache: true
+
+      - name: Install Linux system packages
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libasound2-dev \
+            libx11-dev \
+            libxkbcommon-dev \
+            libxtst-dev \
+            libxinerama-dev \
+            libxrandr-dev \
+            pulseaudio-utils \
+            alsa-utils
+
+      - name: Build
+        run: make build VERSION=${{ github.ref_name }}
+
+      - name: Package archive (Linux/macOS)
+        if: runner.os != 'Windows'
+        shell: bash
+        run: |
+          ARCHIVE="flowstate_${{ github.ref_name }}_${{ matrix.os }}.tar.gz"
+          tar -czf "$ARCHIVE" flowstate README.md LICENSE CHANGELOG.md
+          shasum -a 256 "$ARCHIVE" > "${ARCHIVE}.sha256"
+
+      - name: Package archive (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $archive = "flowstate_${{ github.ref_name }}_${{ matrix.os }}.zip"
+          Compress-Archive -Path flowstate.exe, README.md, LICENSE, CHANGELOG.md -DestinationPath $archive
+          $hash = (Get-FileHash -Algorithm SHA256 $archive).Hash.ToLower()
+          "$hash  $archive" | Out-File -FilePath "$archive.sha256" -Encoding ascii
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: flowstate-${{ matrix.os }}
+          path: |
+            flowstate_${{ github.ref_name }}_${{ matrix.os }}.tar.gz
+            flowstate_${{ github.ref_name }}_${{ matrix.os }}.tar.gz.sha256
+            flowstate_${{ github.ref_name }}_${{ matrix.os }}.zip
+            flowstate_${{ github.ref_name }}_${{ matrix.os }}.zip.sha256
+          if-no-files-found: ignore
+
+  release:
+    name: Publish release
+    runs-on: ubuntu-latest
+    needs: [build]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: ./artifacts
+
+      - name: Create GitHub release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.ref_name }}
+          body_path: CHANGELOG.md
+          draft: true
+          files: ./artifacts/**/*
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

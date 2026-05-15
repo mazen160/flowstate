@@ -1,0 +1,22 @@
+/flowstate
+/flowstate.exe
+*.wav
+.DS_Store
+dist/
+
+# Coverage artifacts
+coverage.out
+*.coverprofile
+
+# IDE / editor files
+.idea/
+.vscode/
+*.swp
+
+# Local agent / workspace state (not source)
+.claude/
+.backlog/
+
+# Upstream reference clone — kept locally for development, not part of the project
+tests/freeflow/
+tests/instructions.md

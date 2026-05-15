@@ -1,0 +1,74 @@
+# GoReleaser configuration for flowstate (Strategy A — host-only placeholder).
+#
+# Per the M11 Release Readiness Checklist, flowstate uses per-OS native CI
+# runners + raw `go build` + `gh release` to ship releases (Strategy A). This
+# .goreleaser.yaml is NOT part of the CI release pipeline; it exists as a
+# placeholder that documents intent and keeps a future Strategy B upgrade
+# one step away.
+#
+# Notes on host-only behavior:
+#   • All three CGO libraries flowstate links (malgo, gohook, clipboard)
+#     require a native toolchain for each target OS. Cross-compile from a
+#     single runner is not viable, hence the per-OS strategy.
+#   • The original M11 spec showed `goos: {{ .Runtime.Goos }}` /
+#     `goarch: {{ .Runtime.Goarch }}` templates to express "host-only".
+#     GoReleaser does not accept templates in the goos/goarch enum fields
+#     (see goreleaser/goreleaser#796, closed wontfix), so the YAML below
+#     lists the full supported matrix instead.
+#   • To run a host-only snapshot build locally, use:
+#         goreleaser build --single-target --snapshot --clean
+#     The `--single-target` flag constrains output to the current GOOS /
+#     GOARCH at invocation time, matching the host-only intent.
+#   • CI itself does NOT invoke goreleaser. The tag-triggered release
+#     workflow (.github/workflows/release.yml, added in M15) uses raw
+#     `go build` + `tar`/`zip` + `gh release` aggregation.
+
+version: 2
+
+project_name: flowstate
+
+before:
+  hooks:
+    - go mod tidy
+
+builds:
+  - id: flowstate
+    main: ./cmd/flowstate
+    binary: flowstate
+    ldflags:
+      - -s -w -X main.version={{.Version}}
+    env:
+      - CGO_ENABLED=1
+    goos:
+      - linux
+      - darwin
+      - windows
+    goarch:
+      - amd64
+      - arm64
+    ignore:
+      - goos: windows
+        goarch: arm64
+
+archives:
+  - id: flowstate
+    builds: [flowstate]
+    name_template: "{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
+    format_overrides:
+      - goos: windows
+        formats: [zip]
+    files:
+      - README.md
+      - LICENSE
+      - CHANGELOG.md
+
+checksum:
+  name_template: "checksums.txt"
+
+release:
+  github:
+    owner: mazin-ahmed
+    name: flowstate
+  name_template: "v{{ .Version }}"
+  draft: true
+  prerelease: auto

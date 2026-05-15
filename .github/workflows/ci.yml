@@ -1,0 +1,57 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+    paths-ignore:
+      - "README.md"
+      - "docs/**"
+      - ".github/ISSUE_TEMPLATE/**"
+  pull_request:
+    branches: [main]
+    paths-ignore:
+      - "README.md"
+      - "docs/**"
+      - ".github/ISSUE_TEMPLATE/**"
+
+jobs:
+  test:
+    name: Test (${{ matrix.os }}, Go ${{ matrix.go }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+        go: ["1.24"]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: ${{ matrix.go }}
+          cache: true
+
+      - name: Install Linux system packages
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libasound2-dev \
+            libx11-dev \
+            libxkbcommon-dev \
+            libxtst-dev \
+            libxinerama-dev \
+            libxrandr-dev \
+            pulseaudio-utils \
+            alsa-utils
+
+      - name: Download modules
+        run: go mod download
+
+      - name: Vet
+        run: go vet ./...
+
+      - name: Test
+        run: go test ./... -timeout 120s -race

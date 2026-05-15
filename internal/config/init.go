@@ -1,0 +1,155 @@
+package config
+
+import (
+	"errors"
+	"fmt"
+	"io/fs"
+	"os"
+	"path/filepath"
+	"strings"
+
+	"github.com/mazin-ahmed/flowstate/internal/prompts"
+)
+
+// configTemplate is the canonical default config body. The three
+// %s placeholders are filled in with TOML literal-multiline-encoded
+// embedded prompts at write time. We hand-write the file (rather than using
+// the toml encoder) so the comments survive — TOML encoders don't preserve
+// comments on roundtrip, and the comments are user-facing documentation.
+const configTemplate = `# Flowstate config file.
+# Get a free Groq API key from https://groq.com.
+
+api_key = ""
+
+# Trigger mode. Picks how a recording is stopped.
+#   "enter"          → start on launch, stop when the user presses Enter.
+#   "push-to-talk"   → record only while ptt_key is held. Requires global
+#                      keyboard hook permission (macOS: Accessibility).
+trigger = "enter"
+ptt_key = "space"
+
+# Groq endpoint. Override only for a self-hosted OpenAI-compatible proxy.
+base_url = "https://api.groq.com/openai/v1"
+
+# Models.
+transcription_model    = "whisper-large-v3"
+cleanup_model          = "openai/gpt-oss-20b"
+cleanup_fallback_model = "meta-llama/llama-4-scout-17b-16e-instruct"
+
+# Optional ISO-639-1 language code to bias transcription. Empty = auto-detect.
+language = ""
+
+# Audio input device. Empty = system default. Use ` + "`flowstate devices`" + ` to list.
+input_device = ""
+
+# Mute system audio output for the duration of the recording so playback from
+# other apps doesn't bleed into the mic. Restored on stop.
+mute_while_recording = true
+
+# Output destination. Comma-separated combination of:
+#   stdout, clipboard, paste
+# or the special value "all".
+output_mode = "stdout,clipboard"
+
+# Active prompt key. Must match a key under [prompts] below.
+active_prompt = "default"
+
+[prompts]
+# default — full FreeFlow-style cleanup with self-correction, formatting,
+# and developer-syntax handling. See README for the long version.
+default = %s
+
+# command — transform highlighted text per a spoken instruction. Reserved
+# for a future "edit mode" subcommand; ignored unless explicitly selected.
+command = %s
+
+# literal — minimal cleanup, no context-awareness. Matches the simple prompt
+# in FreeFlow's README "Custom Cleanup" section.
+literal = %s
+`
+
+// Init writes the canonical default config to path with the three embedded
+// prompts inlined under [prompts].
+//
+// Behavior:
+//   - Creates parent directories as needed (0700, since the dir holds the
+//     plaintext API key).
+//   - Refuses to overwrite an existing file unless force is true.
+//   - Applies 0600 perms on Unix (no-op on Windows).
+func Init(path string, force bool) error {
+	if path == "" {
+		return errors.New("Init: empty path")
+	}
+
+	if !force {
+		if _, err := os.Stat(path); err == nil {
+			return fmt.Errorf("refusing to overwrite existing config at %s (pass --force to replace)", path)
+		} else if !errors.Is(err, fs.ErrNotExist) {
+			return fmt.Errorf("stat %s: %w", path, err)
+		}
+	}
+
+	if dir := filepath.Dir(path); dir != "" && dir != "." {
+		if err := os.MkdirAll(dir, 0o700); err != nil {
+			return fmt.Errorf("create config dir %s: %w", dir, err)
+		}
+	}
+
+	body, err := renderDefault()
+	if err != nil {
+		return err
+	}
+
+	if err := os.WriteFile(path, []byte(body), 0o600); err != nil {
+		return fmt.Errorf("write %s: %w", path, err)
+	}
+	if err := applyConfigPerms(path); err != nil {
+		return fmt.Errorf("set perms on %s: %w", path, err)
+	}
+	return nil
+}
+
+// renderDefault produces the full default config body with the three
+// embedded prompts inlined. Each prompt is TOML-encoded with a delimiter
+// chosen so the resulting bytes roundtrip equal to prompts.Get(name).
+func renderDefault() (string, error) {
+	def, err := tomlMultiline(prompts.Default())
+	if err != nil {
+		return "", fmt.Errorf("encode default prompt: %w", err)
+	}
+	cmd, err := tomlMultiline(prompts.Command())
+	if err != nil {
+		return "", fmt.Errorf("encode command prompt: %w", err)
+	}
+	lit, err := tomlMultiline(prompts.Literal())
+	if err != nil {
+		return "", fmt.Errorf("encode literal prompt: %w", err)
+	}
+	return fmt.Sprintf(configTemplate, def, cmd, lit), nil
+}
+
+// tomlMultiline encodes s as a TOML multiline string. It prefers the
+// literal form ('''...''') because that form preserves bytes verbatim — no
+// backslash escapes, no whitespace folding. It falls back to a basic
+// multiline string ("""...""") with the minimal escaping required if the
+// payload itself contains a '''.
+//
+// A leading newline is inserted directly after the opening delimiter so the
+// first line of the prompt isn't on the same line as the delimiter. TOML
+// strips exactly one immediately-following newline, so this leading newline
+// is consumed on decode and the prompt body roundtrips unchanged.
+func tomlMultiline(s string) (string, error) {
+	if !strings.Contains(s, "'''") {
+		return "'''\n" + s + "'''", nil
+	}
+
+	// Fallback: basic multiline. Escape the characters TOML requires us to
+	// escape inside a """..."""  string. Per the TOML spec the only
+	// characters that need escaping in a basic multiline string are
+	// backslash, and three-or-more consecutive double quotes. We
+	// conservatively escape every double quote that is part of a """
+	// sequence by replacing each `"""` with `""\"`.
+	escaped := strings.ReplaceAll(s, `\`, `\\`)
+	escaped = strings.ReplaceAll(escaped, `"""`, `""\"`)
+	return "\"\"\"\n" + escaped + "\"\"\"", nil
+}
