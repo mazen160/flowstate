@@ -1,13 +1,13 @@
 <div align="center">
 
-<img src="assets/hero.png" alt="flowstate — Think out loud. Ship in text." width="100%"/>
+<img src="assets/hero.png" alt="flowstate, Think out loud. Ship in text." width="100%"/>
 
 <h1>flowstate</h1>
 
 <p><strong>Think out loud. Ship in text.</strong> &nbsp;·&nbsp; <em>Stay in flow.</em></p>
 
 <p>A keyboard-free way to think. flowstate captures your voice, cleans it with an LLM,<br/>
-and drops perfect text into any app — from your terminal <em>or your browser</em>, on Mac, Linux, and Windows.</p>
+and drops perfect text into any app, from your terminal <em>or your browser</em>, on Mac, Linux, and Windows.</p>
 
 <p>
   <a href="https://github.com/mazen160/flowstate/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/mazen160/flowstate/actions/workflows/ci.yml/badge.svg"/></a>
@@ -55,7 +55,7 @@ Hey, just following up on the meeting from yesterday. I think we should
 definitely move the deadline to next Friday.
 ```
 
-The cleaned text lands on stdout AND your clipboard. Status (the `●` / `✓` lines) goes to stderr — pipe-safe by default.
+The cleaned text lands on stdout AND your clipboard. Status (the `●` / `✓` lines) goes to stderr, pipe-safe by default.
 
 ## Two interfaces, one binary
 
@@ -65,13 +65,13 @@ The same `flowstate` binary speaks two surfaces. Same Groq pipeline, same config
 <tr>
 <td width="50%" valign="top">
 
-### CLI — `flowstate`
+### CLI: `flowstate`
 A terminal-native, pipe-friendly dictation tool. Press Enter to stop, or hold a key to push-to-talk. Output to stdout, clipboard, paste-into-focused-app, or any combination. Built for `flowstate | jq`, `flowstate | gh issue create`, `tee -a journal.md`.
 
 </td>
 <td width="50%" valign="top">
 
-### Web UI — `flowstate web`
+### Web UI: `flowstate web`
 A local browser app for when you want a button to click instead of a key to press. Live waveform meter, toast notifications, tap-to-toggle or hold-to-talk. Per-browser session history (never persisted server-side), exports to JSON or Markdown. One command to start.
 
 </td>
@@ -82,7 +82,7 @@ A local browser app for when you want a button to click instead of a key to pres
   <img src="assets/screenshot-web.png" alt="flowstate web UI: a clean light dictation page with a gradient brand mark, large round record button, and a 'Copied to clipboard' toast" width="880"/>
 </div>
 
-Pick whichever fits the moment. They share the config file, the prompts, and the API key — so anything you tune for one applies to the other.
+Pick whichever fits the moment. They share the config file, the prompts, and the API key, so anything you tune for one applies to the other.
 
 ## Why flowstate
 
@@ -91,7 +91,7 @@ Pick whichever fits the moment. They share the config file, the prompts, and the
 <td width="33%" valign="top">
 
 ### Speak.
-Press Enter, hold a key, or click a button — whichever interface you're in. A live mic meter shows you it's listening. No menu-bar app to install, no daemon to manage.
+Press Enter, hold a key, or click a button, whichever interface you're in. A live mic meter shows you it's listening. No menu-bar app to install, no daemon to manage.
 
 </td>
 <td width="33%" valign="top">
@@ -125,11 +125,11 @@ The pipeline is shared between the CLI (`flowstate`) and the web server (`flowst
 
 ## Status
 
-**v1.0.0**, released and tagged. Tested on macOS, Linux, and Windows; the audio capture, paste-as-keystrokes, and web UI paths have been hand-exercised across the three platforms. Bug reports, recipes, and PRs welcome — see [Contributing](#contributing).
+**v1.0.0**, released and tagged. Tested on macOS, Linux, and Windows; the audio capture, paste-as-keystrokes, and web UI paths have been hand-exercised across the three platforms. Bug reports, recipes, and PRs welcome, see [Contributing](#contributing).
 
 ## Install
 
-The fastest path on every platform — one command, one binary, both interfaces:
+The fastest path on every platform, one command, one binary, both interfaces:
 
 ```sh
 go install github.com/mazin-ahmed/flowstate/cmd/flowstate@latest
@@ -258,12 +258,12 @@ That's the whole loop. The cleaned text lands wherever you've configured (stdout
 Run `flowstate web` and open `http://127.0.0.1:8585`. Here's what you get:
 
 - **Tap to toggle, or hold to talk.** A short tap (or `Space` / `Enter`) starts recording, another short tap stops. Press-and-hold (mouse, touch, *or* the Space key) for at least 320 ms to switch into release-to-send mode for that one recording.
-- **Live waveform meter.** While you speak, the brand mark on the record button is replaced by 7 gradient bars driven by your real audio levels — same vocabulary as the CLI's mic meter.
+- **Live waveform meter.** While you speak, the brand mark on the record button is replaced by 7 gradient bars driven by your real audio levels, same vocabulary as the CLI's mic meter.
 - **Latest result + history.** Every recording shows up as a card with Copy and Show-raw buttons. Older transcripts stack into a per-session history list with their own Copy buttons.
 - **Toasts for everything.** Copies (manual *and* auto), settings saves, session switches, and local-data clears all pop a small bottom-right confirmation so you never wonder if a click landed.
 - **Sessions.** Hit *New session* in the top bar to start a fresh stream of transcripts. The session select in Settings switches between past sessions; *Export JSON* / *Export Markdown* dump the current one to a file.
 - **Auto-copy** *(opt-in)*. Toggle in Settings to copy each cleaned transcript to the clipboard automatically the moment it finishes.
-- **Privacy by design.** Sessions, transcripts, and the optional API token live in your browser's `localStorage` — the server never persists them. The audio bytes are streamed straight to Groq and never written to disk on the server side. *Clear local data* in Settings wipes everything in this browser.
+- **Privacy by design.** Sessions, transcripts, and the optional API token live in your browser's `localStorage`, the server never persists them. The audio bytes are streamed straight to Groq and never written to disk on the server side. *Clear local data* in Settings wipes everything in this browser.
 
 Common knobs:
 
@@ -303,7 +303,7 @@ The web UI is a thin client over a minimal JSON API. You can call these directly
 | `GET`  | `/api/info`       | `{"version": "...", "auth_required": true|false}`. The frontend reads this once on load to decide whether to show the token field. |
 | `POST` | `/api/transcribe` | Multipart upload. One field: `audio` (the recorded blob, any browser-supported codec). Returns `{"raw": "...", "cleaned": "...", "duration_ms": 1234}`. |
 
-Auth is a single Bearer token. When `--web-token` (or `FLOWSTATE_WEB_TOKEN`) is set, `/api/transcribe` requires `Authorization: Bearer <token>`. `/api/health` and `/api/info` are intentionally **always public** — the frontend reads `/api/info` to discover whether auth is required, and `/health` is a probe endpoint kept reachable for liveness checks.
+Auth is a single Bearer token. When `--web-token` (or `FLOWSTATE_WEB_TOKEN`) is set, `/api/transcribe` requires `Authorization: Bearer <token>`. `/api/health` and `/api/info` are intentionally **always public**. The frontend reads `/api/info` to discover whether auth is required, and `/health` is a probe endpoint kept reachable for liveness checks.
 
 ```sh
 # Health check (always works, no token)
@@ -319,7 +319,7 @@ curl -X POST http://127.0.0.1:8585/api/transcribe \
      -F "audio=@clip.webm"
 ```
 
-`POST /api/transcribe` is rate-limited to **30 requests per minute per source IP** — far above interactive use, low enough to bound runaway Groq spend if the API is exposed on a LAN. The response carries `Retry-After: 60` when the limit fires.
+`POST /api/transcribe` is rate-limited to **30 requests per minute per source IP**, far above interactive use, low enough to bound runaway Groq spend if the API is exposed on a LAN. The response carries `Retry-After: 60` when the limit fires.
 
 Every non-success response shares the shape `{"error": "<friendly message>"}`. Status codes for `/api/transcribe`:
 
@@ -344,7 +344,7 @@ Every non-success response shares the shape `{"error": "<friendly message>"}`. S
 flowstate --output paste --paste-delay 3
 ```
 
-Speak, press Enter (or wait for max-time), then switch to Slack within 3 seconds — flowstate types the cleaned text where your cursor is.
+Speak, press Enter (or wait for max-time), then switch to Slack within 3 seconds, flowstate types the cleaned text where your cursor is.
 
 <div align="center">
   <img src="assets/screenshot-paste.png" alt="flowstate dictating into Slack" width="880"/>
@@ -352,7 +352,7 @@ Speak, press Enter (or wait for max-time), then switch to Slack within 3 seconds
 
 ### Push-to-talk (CLI)
 
-Edit the config: `trigger = "push-to-talk"`, `ptt_key = "space"`. Then run `flowstate` — recording starts when you hold space and stops when you release. Requires Accessibility permission on macOS.
+Edit the config: `trigger = "push-to-talk"`, `ptt_key = "space"`. Then run `flowstate`, recording starts when you hold space and stops when you release. Requires Accessibility permission on macOS.
 
 <div align="center">
   <img src="assets/screenshot-ptt.png" alt="flowstate push-to-talk session" width="880"/>
@@ -364,7 +364,7 @@ Edit the config: `trigger = "push-to-talk"`, `ptt_key = "space"`. Then run `flow
 flowstate web
 ```
 
-Open `http://127.0.0.1:8585` in any tab — Chrome, Safari, Firefox, Arc. Tap the button (or hold Space) to dictate. Hit *Auto-copy* in Settings if you'd like the cleaned text to land on your clipboard automatically the moment each recording finishes.
+Open `http://127.0.0.1:8585` in any tab, Chrome, Safari, Firefox, Arc. Tap the button (or hold Space) to dictate. Hit *Auto-copy* in Settings if you'd like the cleaned text to land on your clipboard automatically the moment each recording finishes.
 
 ### Save a transcript to a file (CLI)
 
@@ -388,7 +388,7 @@ Auto-stops after 10 seconds. Same pipeline; exits 0.
 
 ### Translate as you dictate
 
-Set `output_language = "French"` in `~/.config/flowstate/config.toml`, then run `flowstate` (or `flowstate web`) and speak in English. The cleanup pass translates the result. Works the same in both interfaces — they read the same config.
+Set `output_language = "French"` in `~/.config/flowstate/config.toml`, then run `flowstate` (or `flowstate web`) and speak in English. The cleanup pass translates the result. Works the same in both interfaces, they read the same config.
 
 ### Pipe into a tool (CLI)
 
@@ -405,7 +405,7 @@ flowstate devices            # list inputs
 flowstate --device '4275696c74496e4d6963726f70686f6e65446576696365'
 ```
 
-In the web UI, the microphone is whichever your browser's standard "this site wants to use your microphone" picker selected — change it from the browser's site-permissions UI.
+In the web UI, the microphone is whichever your browser's standard "this site wants to use your microphone" picker selected, change it from the browser's site-permissions UI.
 
 ### Dictate from another machine on your LAN (Web UI)
 
@@ -415,7 +415,7 @@ flowstate web \
   --web-token "$(openssl rand -hex 16)"
 ```
 
-flowstate prints the listening URL on stderr; visit it from your laptop, your iPad, your phone. **Always set `--web-token` when binding to a non-loopback interface** — the warning on startup isn't a suggestion.
+flowstate prints the listening URL on stderr; visit it from your laptop, your iPad, your phone. **Always set `--web-token` when binding to a non-loopback interface**, the warning on startup isn't a suggestion.
 
 ### Disable colors / quiet mode (CLI)
 
@@ -430,11 +430,11 @@ flowstate 2>/dev/null          # suppress all status; transcript only
 |                          | **flowstate**                                   | Wispr Flow         | Superwhisper            |
 |--------------------------|-------------------------------------------------|--------------------|-------------------------|
 | Mac / Linux / Windows    | Yes                                             | Mac / Win / mobile | Mac only                |
-| Terminal-native CLI      | Yes — pipe-friendly                             | No (menu-bar app)  | No (menu-bar app)       |
-| Local web UI             | Yes — `flowstate web`                           | No                 | No                      |
-| LLM cleanup pass         | Yes — Groq                                      | Yes — proprietary  | Yes — proprietary       |
-| BYO API key              | Yes — Groq                                      | Subscription       | One-time license        |
-| Network required         | Yes — Groq API                                  | Yes                | No (local)              |
+| Terminal-native CLI      | Yes, pipe-friendly                             | No (menu-bar app)  | No (menu-bar app)       |
+| Local web UI             | Yes, `flowstate web`                           | No                 | No                      |
+| LLM cleanup pass         | Yes, Groq                                      | Yes, proprietary  | Yes, proprietary       |
+| BYO API key              | Yes, Groq                                      | Subscription       | One-time license        |
+| Network required         | Yes, Groq API                                  | Yes                | No (local)              |
 | Cost                     | Free + Groq API usage                           | Subscription       | One-time license        |
 | Best for                 | Devs who live in the terminal *and* the browser | Knowledge workers  | Privacy-first dictators |
 
@@ -454,7 +454,7 @@ on Windows).
 
 The Groq API key is **not** a config field. It is read from the `GROQ_API_KEY`
 environment variable (or `GROQ_API_TOKEN` as a fallback) at runtime. Any
-subcommand that calls Groq — `flowstate` *or* `flowstate web` — will fail with
+subcommand that calls Groq, `flowstate` *or* `flowstate web`, will fail with
 a friendly message naming both env vars if neither is set.
 
 </details>
@@ -518,7 +518,7 @@ The web subcommand reads the rest of its behavior (transcription model, cleanup 
 | `paste_delay_seconds`    | `0`                                        | When `paste` is enabled, wait N seconds between writing the clipboard and firing the paste keystroke. |
 | `[prompts]`              | three embedded prompts                     | Table of named cleanup prompts. See **Prompts** below.                               |
 
-Fields marked *(CLI only)* are ignored by `flowstate web` — the web UI handles output in the browser (clipboard + page + history), the recording trigger is the page itself, and the device picker is the browser's.
+Fields marked *(CLI only)* are ignored by `flowstate web`, the web UI handles output in the browser (clipboard + page + history), the recording trigger is the page itself, and the device picker is the browser's.
 
 </details>
 
@@ -527,9 +527,9 @@ Fields marked *(CLI only)* are ignored by `flowstate web` — the web UI handles
 
 `[prompts]` is a table of named system prompts. flowstate ships three by default:
 
-- **`default`** — full cleanup. Removes filler words, fixes spelling and punctuation, preserves the speaker's intent, and is aware of developer syntax (code blocks, command names) so technical dictation doesn't get auto-corrected to gibberish.
-- **`command`** — transform a highlighted piece of text per a spoken instruction (e.g. "make this shorter"). Reserved for a future edit-mode subcommand; currently ignored unless explicitly selected.
-- **`literal`** — minimal cleanup, no context-awareness. Use this if the default prompt is rewriting more than you want.
+- **`default`**, full cleanup. Removes filler words, fixes spelling and punctuation, preserves the speaker's intent, and is aware of developer syntax (code blocks, command names) so technical dictation doesn't get auto-corrected to gibberish.
+- **`command`**, transform a highlighted piece of text per a spoken instruction (e.g. "make this shorter"). Reserved for a future edit-mode subcommand; currently ignored unless explicitly selected.
+- **`literal`**, minimal cleanup, no context-awareness. Use this if the default prompt is rewriting more than you want.
 
 Switch prompts per-run with `--prompt <name>` (CLI), or change `active_prompt` in the config to make it sticky for both the CLI and the web UI. Prompt bodies are embedded into the default config at `flowstate config init` time, so you can edit them in place; re-init won't clobber your changes (use `--force` to overwrite).
 
@@ -548,26 +548,26 @@ Capture starts when you press and hold `ptt_key`, and stops when you release it.
 
 PTT uses a global keyboard hook (so the key works regardless of which window has focus), which requires extra permissions:
 
-- **macOS** — Accessibility permission for the terminal application, granted in **System Settings → Privacy & Security → Accessibility**. The first attempted use will prompt you.
-- **Linux** — usually works out of the box on X11; Wayland support depends on the compositor.
-- **Windows** — works out of the box.
+- **macOS**, Accessibility permission for the terminal application, granted in **System Settings → Privacy & Security → Accessibility**. The first attempted use will prompt you.
+- **Linux**, usually works out of the box on X11; Wayland support depends on the compositor.
+- **Windows**, works out of the box.
 
 The web UI's tap-vs-hold gesture (described above) replaces this for browser sessions and needs no extra permissions.
 
 </details>
 
 <details>
-<summary><b>Output modes (stdout / clipboard / paste / all) — CLI</b></summary>
+<summary><b>Output modes (stdout / clipboard / paste / all), CLI</b></summary>
 
 `output_mode` is a comma-separated list of destinations:
 
-- `stdout` — print the cleaned text to standard output, followed by a newline. Status (`Done. (N characters)`) goes to stderr, so stdout stays pipeable.
-- `clipboard` — copy the cleaned text to the system clipboard.
-- `paste` — simulate `Cmd+V` (macOS) or `Ctrl+V` (Linux/Windows) into the currently focused application.
+- `stdout`, print the cleaned text to standard output, followed by a newline. Status (`Done. (N characters)`) goes to stderr, so stdout stays pipeable.
+- `clipboard`, copy the cleaned text to the system clipboard.
+- `paste`, simulate `Cmd+V` (macOS) or `Ctrl+V` (Linux/Windows) into the currently focused application.
 
 The literal value `all` is shorthand for `stdout,clipboard,paste`. Order doesn't matter; flowstate always writes to all selected destinations.
 
-(The web UI doesn't use `output_mode` — the cleaned text is rendered into the page and, if the *Auto-copy* setting is on, pushed to your clipboard via the browser's clipboard API.)
+(The web UI doesn't use `output_mode`, the cleaned text is rendered into the page and, if the *Auto-copy* setting is on, pushed to your clipboard via the browser's clipboard API.)
 
 </details>
 
@@ -576,7 +576,7 @@ The literal value `all` is shorthand for `stdout,clipboard,paste`. Order doesn't
 
 While a recording is in flight, flowstate prints staged status lines to **stderr**:
 
-- `● Recording — press Enter to stop` with a small live audio-level meter while you speak.
+- `● Recording, press Enter to stop` with a small live audio-level meter while you speak.
 - `● Transcribing…` once the upload starts.
 - `● Cleaning up…` while the LLM rewrite runs.
 - `✓ Done. (N characters, 2.3s)` at the end.
@@ -592,13 +592,13 @@ The web UI replaces these with on-page state (waveform meter, ring pulse, status
 <details>
 <summary><b>All subcommands</b></summary>
 
-- `flowstate` — record (CLI). The default command.
-- `flowstate web [flags]` — start the local web UI + JSON API. Default bind: `127.0.0.1:8585`.
-- `flowstate version` — print the build identifier and Go runtime version.
-- `flowstate config init [--force] [--config <path>]` — write the default config to the resolved path. `--force` overwrites an existing file.
-- `flowstate config path [--config <path>]` — print the resolved config path to stdout.
-- `flowstate devices` — list input devices as `<UID>\t<Name>`. Useful for filling in `input_device`. Exits 1 with "no input devices found" on a headless host.
-- `flowstate --help` / `-h` / `help` — print the short help text.
+- `flowstate`, record (CLI). The default command.
+- `flowstate web [flags]`, start the local web UI + JSON API. Default bind: `127.0.0.1:8585`.
+- `flowstate version`, print the build identifier and Go runtime version.
+- `flowstate config init [--force] [--config <path>]`, write the default config to the resolved path. `--force` overwrites an existing file.
+- `flowstate config path [--config <path>]`, print the resolved config path to stdout.
+- `flowstate devices`, list input devices as `<UID>\t<Name>`. Useful for filling in `input_device`. Exits 1 with "no input devices found" on a headless host.
+- `flowstate --help` / `-h` / `help`, print the short help text.
 
 </details>
 
@@ -612,7 +612,7 @@ The web UI replaces these with on-page state (waveform meter, ring pulse, status
 | `mute_while_recording` | `osascript` (built-in)             | `pactl` (PulseAudio) or `amixer` (ALSA) | built-in (Core Audio)  |
 | `output_mode = paste`  | Accessibility permission for the terminal running flowstate | `wtype` (Wayland) or `xdotool` (X11)    | built-in (`SendInput`) |
 | Push-to-talk (CLI)     | Accessibility permission           | (X11/Wayland keyboard hook libs)        | built-in               |
-| Push-to-talk (web)     | none — browser handles it          | none                                    | none                   |
+| Push-to-talk (web)     | none, browser handles it          | none                                    | none                   |
 
 </details>
 
@@ -621,32 +621,32 @@ The web UI replaces these with on-page state (waveform meter, ring pulse, status
 <details>
 <summary><b>Common errors and fixes</b></summary>
 
-**`Invalid API key for api.groq.com.`** — your Groq key is unset, expired, or revoked. Generate a new one at [console.groq.com](https://console.groq.com) and re-export it: `export GROQ_API_KEY=gsk_...`.
+**`Invalid API key for api.groq.com.`**, your Groq key is unset, expired, or revoked. Generate a new one at [console.groq.com](https://console.groq.com) and re-export it: `export GROQ_API_KEY=gsk_...`.
 
-**`Groq API key not found. Set GROQ_API_KEY (preferred) or GROQ_API_TOKEN in your environment.`** — flowstate looked for both env vars and found neither set. Export `GROQ_API_KEY` in the shell you launch flowstate from (add the line to `~/.zshrc` or `~/.bashrc` so it persists).
+**`Groq API key not found. Set GROQ_API_KEY (preferred) or GROQ_API_TOKEN in your environment.`**, flowstate looked for both env vars and found neither set. Export `GROQ_API_KEY` in the shell you launch flowstate from (add the line to `~/.zshrc` or `~/.bashrc` so it persists).
 
-**`no input devices found` on `flowstate devices`** — the OS has no microphones registered. On macOS, check **System Settings → Privacy & Security → Microphone** and grant the terminal app permission. On Linux, verify `pactl list short sources` shows at least one source.
+**`no input devices found` on `flowstate devices`**, the OS has no microphones registered. On macOS, check **System Settings → Privacy & Security → Microphone** and grant the terminal app permission. On Linux, verify `pactl list short sources` shows at least one source.
 
-**Paste doesn't paste anything on macOS** — your terminal hasn't been granted Accessibility permission. Toggle it off and back on under **System Settings → Privacy & Security → Accessibility**, then re-run flowstate. The permission applies to the terminal application, not the flowstate binary itself.
+**Paste doesn't paste anything on macOS**, your terminal hasn't been granted Accessibility permission. Toggle it off and back on under **System Settings → Privacy & Security → Accessibility**, then re-run flowstate. The permission applies to the terminal application, not the flowstate binary itself.
 
-**`Audio too large (HTTP 413). Try a shorter recording.`** — Groq's transcription endpoint caps uploads at 25 MB. At PCM16 mono 16 kHz that's about 13 minutes of audio. Stop and restart for long-form dictation. The web UI surfaces the same limit on `/api/transcribe`.
+**`Audio too large (HTTP 413). Try a shorter recording.`**, Groq's transcription endpoint caps uploads at 25 MB. At PCM16 mono 16 kHz that's about 13 minutes of audio. Stop and restart for long-form dictation. The web UI surfaces the same limit on `/api/transcribe`.
 
-**`Rate limited (HTTP 429). Wait a moment and retry.`** — Groq's free tier has rate limits. flowstate automatically retries the cleanup pass with `cleanup_fallback_model`, but the transcription pass surfaces 429 directly.
+**`Rate limited (HTTP 429). Wait a moment and retry.`**, Groq's free tier has rate limits. flowstate automatically retries the cleanup pass with `cleanup_fallback_model`, but the transcription pass surfaces 429 directly.
 
 </details>
 
 <details>
 <summary><b>Web UI specific issues</b></summary>
 
-**`listen tcp 127.0.0.1:8585: bind: address already in use`** — another process owns the port. Either stop it, or pick a different one: `flowstate web --web-port 9000`.
+**`listen tcp 127.0.0.1:8585: bind: address already in use`**, another process owns the port. Either stop it, or pick a different one: `flowstate web --web-port 9000`.
 
 **The browser asks for microphone permission and you blocked it.** Without mic access, the record button can't capture audio. Open your browser's site permissions for `http://127.0.0.1:8585` (or whichever URL you bound to) and re-allow microphone access, then reload the page.
 
-**`⚠ WARNING: binding 0.0.0.0:8585 without --web-token. Any device on the network can use the API without authentication.`** — exactly what it says. Either bind back to `127.0.0.1` (the default), or set `--web-token "..."` (or `FLOWSTATE_WEB_TOKEN=...`) so the API rejects unauthenticated requests with `401`.
+**`⚠ WARNING: binding 0.0.0.0:8585 without --web-token. Any device on the network can use the API without authentication.`**, exactly what it says. Either bind back to `127.0.0.1` (the default), or set `--web-token "..."` (or `FLOWSTATE_WEB_TOKEN=...`) so the API rejects unauthenticated requests with `401`.
 
-**The page loads but `Record` does nothing.** Open your browser's devtools console — most likely the mic permission was denied or the request to `/api/transcribe` returned `401` (token missing/wrong). The web UI surfaces the failure as a toast; the console has the underlying HTTP error.
+**The page loads but `Record` does nothing.** Open your browser's devtools console, most likely the mic permission was denied or the request to `/api/transcribe` returned `401` (token missing/wrong). The web UI surfaces the failure as a toast; the console has the underlying HTTP error.
 
-**Settings changes don't seem to stick.** All web settings (token, session, auto-copy) live in the browser's `localStorage` for the URL you're on. Clearing your browser's site data — or using a different browser/profile — starts fresh. Use *Clear local data* in the Settings sheet to wipe deliberately.
+**Settings changes don't seem to stick.** All web settings (token, session, auto-copy) live in the browser's `localStorage` for the URL you're on. Clearing your browser's site data, or using a different browser/profile, starts fresh. Use *Clear local data* in the Settings sheet to wipe deliberately.
 
 </details>
 
@@ -657,8 +657,8 @@ What's shipped, and what's intentionally left out:
 - ✅ Cross-platform CLI (Mac / Linux / Windows).
 - ✅ Local web UI (`flowstate web`) bundled in the same binary.
 - ✅ JSON API (`/api/health`, `/api/info`, `/api/transcribe`) with optional Bearer auth.
-- ✅ Push-to-talk and press-to-stop triggers — both interfaces.
-- ✅ Live mic-meter visualization — both interfaces.
+- ✅ Push-to-talk and press-to-stop triggers, both interfaces.
+- ✅ Live mic-meter visualization, both interfaces.
 - ✅ stdout / clipboard / paste output (CLI), in any combination.
 - ✅ In-page result + history + JSON / Markdown export (web).
 - ✅ Translation via the cleanup pass.
@@ -667,9 +667,9 @@ What's shipped, and what's intentionally left out:
 - 🟡 Edit-mode subcommand for "rewrite this highlighted text by voice".
 - 🟡 Local redaction of empty space locally.
 - 🟡 Background daemon for the CLI. a CLI invocation is one recording. The web server fills the long-running need. At one point, Flowstate can have shortcut keys to start recording as part of a CLI daemon.
-- ❌ Menu bar / system tray native app — flowstate intentionally stays a single binary; the web UI covers the "I want a button to click" use case.
-- ❌ Offline / local transcription — flowstate calls Groq.
-- ❌ OS-keychain integration — the Groq API key lives in `GROQ_API_KEY`.
+- ❌ Menu bar / system tray native app, flowstate intentionally stays a single binary; the web UI covers the "I want a button to click" use case.
+- ❌ Offline / local transcription, flowstate calls Groq.
+- ❌ OS-keychain integration, the Groq API key lives in `GROQ_API_KEY`.
 
 Want one of the 🟡s sooner? Open an issue or chime in on Discussions.
 
@@ -681,7 +681,7 @@ If you're using flowstate in your daily workflow, share what you built in [Discu
 
 ## License
 
-MIT — see [LICENSE](LICENSE).
+MIT, see [LICENSE](LICENSE).
 
 ## Credits
 
