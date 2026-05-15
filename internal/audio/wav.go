@@ -1,6 +1,6 @@
 // Package audio captures microphone input as 16 kHz mono PCM16 and writes
 // WAV files for downstream transcription. The capture pipeline mirrors the
-// FreeFlow Swift recorder's output format (PCM signed 16-bit, little-endian,
+// upstream Swift recorder's output format (PCM signed 16-bit, little-endian,
 // mono, 16000 Hz) so the wire format reaching the Groq Whisper API is
 // identical.
 package audio

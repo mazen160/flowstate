@@ -6,7 +6,7 @@
 // per request and write the parts hand-crafted (rather than via
 // mime/multipart.Writer's default field order, which is just whatever order
 // the caller invokes CreateFormField in but using our own writer keeps the
-// header layout explicit and easy to audit against the FreeFlow port).
+// header layout explicit and easy to audit against the port).
 //
 // The body is materialized in memory because the recordings are short (a
 // few hundred KB at most for normal dictation) and net/http requires either

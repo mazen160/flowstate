@@ -41,13 +41,6 @@ doesn't need to walk the module cache.
 | `golang.org/x/text` | BSD-3-Clause | toolchain transitive |
 | `golang.org/x/tools` | BSD-3-Clause | toolchain transitive |
 
-## Embedded prompts
-
-`internal/prompts/{default,command,literal}.txt` are byte-for-byte ports of
-prompt strings from [FreeFlow](https://github.com/zachlatta/freeflow), which
-is also MIT-licensed. The port is attributed in the README's "Credits"
-section and in code comments above each prompt.
-
 ## Reproducing this list
 
 ```sh

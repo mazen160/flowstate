@@ -2,7 +2,7 @@
 // This file: mapHTTPError translates a non-2xx response from the provider
 // into a one-line, user-readable error message. The mapping is the canonical
 // list in the "Groq Provider Contract" doc and is ported (with flowstate
-// phrasing) from FreeFlow's TranscriptionService.friendlyHTTPMessage.
+// phrasing) from the upstream transcription service.
 package transcribe
 
 import "fmt"

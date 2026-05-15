@@ -102,7 +102,7 @@ max_time_seconds = 0
 paste_delay_seconds = 0
 
 [prompts]
-# default — full FreeFlow-style cleanup with self-correction, formatting,
+# default — full default cleanup with self-correction, formatting,
 # and developer-syntax handling. See README for the long version.
 default = %s
 
@@ -111,7 +111,7 @@ default = %s
 command = %s
 
 # literal — minimal cleanup, no context-awareness. Matches the simple prompt
-# in FreeFlow's README "Custom Cleanup" section.
+# in the upstream reference's README "Custom Cleanup" section.
 literal = %s
 `
 

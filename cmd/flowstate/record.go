@@ -206,7 +206,7 @@ func runRecord(ctx context.Context, args []string, stdin io.Reader, stdout, stde
 		reporter.Error("active_prompt %q has no body under [prompts]", cfg.ActivePrompt)
 		return 1
 	}
-	// FreeFlow-parity augmentations: translation directive and
+	// prompt augmentations: translation directive and
 	// high-priority vocabulary block. Both are no-ops when their
 	// driving config field is empty, so the un-customized prompt is
 	// byte-for-byte identical to the [prompts] entry.
@@ -285,7 +285,7 @@ func runRecord(ctx context.Context, args []string, stdin io.Reader, stdout, stde
 // the animated meter when stderr is a TTY.
 //
 // PTT mode: capture starts in trigger.onStart, which fires on the key-down
-// edge — this matches FreeFlow's hold-to-record gesture, where lifting the
+// edge — this matches the upstream hold-to-record gesture, where lifting the
 // key both stops capture and uploads. We deliberately skip the animated
 // meter here — gohook's global event loop and a redraw goroutine fighting
 // over stderr in the same terminal cell tend to produce flicker, and the

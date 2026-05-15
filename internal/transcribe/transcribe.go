@@ -5,7 +5,7 @@
 // transcript text.
 //
 // The wire format and hallucination filter are pinned by the
-// "Groq Provider Contract" doc and ported from FreeFlow's TranscriptionService
+// "Groq Provider Contract" doc and ported from the upstream transcription service
 // so the bytes leaving Flowstate are indistinguishable from the Swift app.
 //
 // This package is stdlib-only by design — no JSON/HTTP helpers beyond what
@@ -34,7 +34,7 @@ import (
 )
 
 // defaultTimeout is the per-request timeout when the caller doesn't supply
-// an http.Client. It matches FreeFlow's transcriptionTimeoutSeconds and the
+// an http.Client. It matches the documented transcription timeout and the
 // "Timeout: 20 s per request" line in the provider contract doc.
 const defaultTimeout = 20 * time.Second
 
@@ -202,7 +202,7 @@ func (c *Client) TranscribeReader(ctx context.Context, r io.Reader, filename str
 }
 
 // parseTranscript unmarshals the response body and applies the hallucination
-// filter. It mirrors FreeFlow's parseTranscript:
+// filter. It mirrors the upstream reference's parseTranscript:
 //
 //  1. Try JSON first. If we get a "text" field, that's the answer; run the
 //     hallucination filter and either return text or "".

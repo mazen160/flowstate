@@ -18,8 +18,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `stdout` / `clipboard` / `paste`, or the literal `"all"`.
 - Three embedded prompts (`default`, `command`, `literal`) inlined into
   the TOML config on first `flowstate config init` so users can edit
-  them in place. The `default` and `command` strings are byte-for-byte
-  ports of FreeFlow's `PostProcessingService` prompts.
+  them in place.
 - TOML config at platform-default paths (`$XDG_CONFIG_HOME/flowstate/`
   on macOS/Linux, `%APPDATA%\flowstate\` on Windows). `--config <path>`
   and `$FLOWSTATE_CONFIG` overrides.
@@ -41,8 +40,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   clipboard, prints a `● Pasting in Ns…` status, waits the delay,
   then fires the paste keystroke. Lets the user switch to the
   destination window before the keystroke lands.
-- `output_language` config field — when set, appends FreeFlow's
-  translation directive to the cleanup system prompt and outputs in the
+- `output_language` config field — when set, appends a translation
+  directive to the cleanup system prompt so the output lands in the
   requested language regardless of what was spoken.
 - `preserve_clipboard_after_paste` config field — when paste output is
   enabled and this is true (default), flowstate snapshots the clipboard
@@ -72,9 +71,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   Missing key fails fast with a friendly message naming both env vars.
 - `language` defaults to `"en"` (English). Set to `""` for Whisper
   auto-detect, or `"fr"`/`"es"`/etc. for other languages.
-- Hallucination filter ported verbatim from FreeFlow: ten common short
-  phrases (`thank you`, `please subscribe`, `subtitles by…`, etc.) are
-  dropped when Whisper reports `no_speech_prob >= 0.1`.
+- Hallucination filter: ten common short phrases (`thank you`,
+  `please subscribe`, `subtitles by…`, etc.) are dropped when Whisper
+  reports `no_speech_prob >= 0.1`.
 - All status messages go to stderr; stdout receives only the cleaned
   transcript. Pipe-safe: `flowstate | jq`, `flowstate > note.md`,
   `flowstate | pbcopy` all work cleanly.

@@ -5,7 +5,7 @@
 //
 // The wire format, the conditional gpt-oss-20b fields, the sanitization
 // rules, and the fallback policy are pinned by the "Groq Provider Contract"
-// doc and ported from FreeFlow's PostProcessingService so the bytes leaving
+// doc and ported from the upstream cleanup service so the bytes leaving
 // Flowstate are indistinguishable from the Swift app.
 //
 // This package is stdlib-only by design. The whole client is a Client struct
@@ -32,7 +32,7 @@ import (
 )
 
 // defaultTimeout is the per-request timeout when the caller doesn't supply
-// an http.Client. It matches FreeFlow's postProcessingTimeoutSeconds and the
+// an http.Client. It matches the documented cleanup timeout and the
 // "Timeout: 20 s per request" line in the provider contract doc.
 const defaultTimeout = 20 * time.Second
 

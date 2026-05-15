@@ -19,7 +19,7 @@ type InputDevice struct {
 // ListInputDevices returns the available input devices as (UID, Name)
 // pairs. Devices with empty UIDs or names are skipped, the slice is
 // de-duplicated by UID, and the result is sorted by Name (case-insensitive)
-// to match FreeFlow's `AudioDevice.availableInputDevices`.
+// to match the upstream reference's `AudioDevice.availableInputDevices`.
 //
 // Each call spins up a temporary malgo context — enumeration is rare
 // enough (only on `flowstate devices` and at startup) that holding a

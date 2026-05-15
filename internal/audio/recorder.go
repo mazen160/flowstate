@@ -87,7 +87,7 @@ func (r *Recorder) Start() error {
 
 	// Bind a specific device by UID if requested. The empty string falls
 	// through to the system default, which mirrors how AVCaptureDevice
-	// works on the FreeFlow side when input_device is unset.
+	// works on the upstream when input_device is unset.
 	if r.deviceUID != "" {
 		id, found, lookupErr := findCaptureDeviceID(ctx, r.deviceUID)
 		if lookupErr != nil {

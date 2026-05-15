@@ -527,7 +527,7 @@ Fields marked *(CLI only)* are ignored by `flowstate web` — the web UI handles
 
 `[prompts]` is a table of named system prompts. flowstate ships three by default:
 
-- **`default`** — full FreeFlow-style cleanup. Removes filler words, fixes spelling and punctuation, preserves the speaker's intent, and is aware of developer syntax (code blocks, command names) so technical dictation doesn't get auto-corrected to gibberish.
+- **`default`** — full cleanup. Removes filler words, fixes spelling and punctuation, preserves the speaker's intent, and is aware of developer syntax (code blocks, command names) so technical dictation doesn't get auto-corrected to gibberish.
 - **`command`** — transform a highlighted piece of text per a spoken instruction (e.g. "make this shorter"). Reserved for a future edit-mode subcommand; currently ignored unless explicitly selected.
 - **`literal`** — minimal cleanup, no context-awareness. Use this if the default prompt is rewriting more than you want.
 

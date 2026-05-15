@@ -18,7 +18,7 @@ func TestApplyOutputLanguage_Empty(t *testing.T) {
 	}
 }
 
-// TestApplyOutputLanguage_Appended pins the exact FreeFlow translation
+// TestApplyOutputLanguage_Appended pins the exact the upstream reference translation
 // instruction byte-for-byte. If this test fails, the augmentation has
 // drifted from the Swift reference at PostProcessingService.swift:555-557.
 func TestApplyOutputLanguage_Appended(t *testing.T) {

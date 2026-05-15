@@ -8,7 +8,7 @@
 // these known stock phrases, we replace the transcript with the empty string
 // so the rest of the pipeline treats the recording as silent.
 //
-// The phrase list and threshold (0.1) are ported verbatim from FreeFlow's
+// The phrase list and threshold (0.1) are ported verbatim from the upstream reference's
 // TranscriptionService.isHallucination. Both were tuned against ~500 samples
 // of real and empty audio; the threshold is intentionally conservative to
 // minimize filtering real user speech.
@@ -43,7 +43,7 @@ var hallucinationPhrases = map[string]struct{}{
 const hallucinationNoSpeechThreshold = 0.1
 
 // isHallucination returns true when text should be filtered out as a known
-// Whisper stock-phrase hallucination on silence. It mirrors FreeFlow's
+// Whisper stock-phrase hallucination on silence. It mirrors the upstream reference's
 // isHallucination(text:json:) exactly:
 //
 //  1. Lowercase the text and strip surrounding whitespace and punctuation.

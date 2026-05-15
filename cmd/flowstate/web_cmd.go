@@ -112,7 +112,7 @@ func runWeb(ctx context.Context, args []string, stderr io.Writer) int {
 		FallbackModel: cfg.CleanupFallbackModel,
 	})
 
-	// 7. Resolve the active system prompt and apply the same FreeFlow-
+	// 7. Resolve the active system prompt and apply the same the upstream reference-
 	//    parity augmentations as record.go (output language directive +
 	//    high-priority vocabulary block).
 	systemPrompt, ok := cfg.Prompts[cfg.ActivePrompt]

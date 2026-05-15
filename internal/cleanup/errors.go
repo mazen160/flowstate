@@ -3,7 +3,7 @@
 // mapHTTPError translates a non-2xx response from the provider into a
 // one-line, user-readable error message. The mapping is the canonical list
 // in the "Groq Provider Contract" doc and is ported (with flowstate
-// phrasing) from FreeFlow.
+// phrasing) from the upstream reference.
 //
 // The table is intentionally duplicated from internal/transcribe rather
 // than imported: cleanup does not conceptually depend on transcribe, the

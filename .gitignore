@@ -17,6 +17,6 @@ coverage.out
 .claude/
 .backlog/
 
-# Upstream reference clone — kept locally for development, not part of the project
+# Local reference clones — not part of this project
 tests/freeflow/
 tests/instructions.md

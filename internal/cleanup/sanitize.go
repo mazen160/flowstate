@@ -2,7 +2,7 @@
 //
 // sanitizeOutput applies the three rules from the "Groq Provider Contract"
 // doc to the raw choices[0].message.content string. The rules are ported
-// verbatim from FreeFlow's PostProcessingService.sanitizePostProcessedTranscript.
+// verbatim from the upstream cleanup service's sanitizer.
 package cleanup
 
 import "strings"

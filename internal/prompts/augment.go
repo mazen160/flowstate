@@ -2,10 +2,10 @@ package prompts
 
 import "strings"
 
-// ApplyOutputLanguage returns systemPrompt with FreeFlow's translation
+// ApplyOutputLanguage returns systemPrompt with the upstream reference's translation
 // instruction appended when language is non-empty after trimming.
 //
-// The appended sentence is taken verbatim from FreeFlow's
+// The appended sentence is taken verbatim from the upstream reference's
 // PostProcessingService.applyOutputLanguage:
 //
 //	"IMPORTANT: Translate the final cleaned text into <X>. Output ONLY in
@@ -16,7 +16,7 @@ import "strings"
 // systemPrompt is returned unchanged.
 //
 // The two newlines between the original prompt and the instruction match
-// FreeFlow's join behavior so byte-level diffs against the Swift output
+// the documented join behavior so byte-level diffs against the Swift output
 // stay clean.
 func ApplyOutputLanguage(systemPrompt, language string) string {
 	lang := strings.TrimSpace(language)
@@ -29,11 +29,11 @@ func ApplyOutputLanguage(systemPrompt, language string) string {
 		", regardless of the original spoken language."
 }
 
-// ApplyVocabulary returns systemPrompt with FreeFlow's high-priority
+// ApplyVocabulary returns systemPrompt with the upstream reference's high-priority
 // vocabulary block appended when rawVocabulary parses to at least one
 // non-empty term.
 //
-// Parsing rules (match FreeFlow's mergedVocabularyTerms):
+// Parsing rules (match the upstream vocabulary parser):
 //   - Split on '\n', ',', and ';'.
 //   - Trim each token.
 //   - Drop empty tokens.
@@ -46,7 +46,7 @@ func ApplyOutputLanguage(systemPrompt, language string) string {
 //	 while rewriting.\nUse these spellings exactly in the output when
 //	 relevant:\n<comma-joined terms>"
 //
-// (joined with ", " — matches FreeFlow's normalizedVocabularyText).
+// (joined with ", " — matches the upstream vocabulary normalizer).
 //
 // If no terms survive, systemPrompt is returned unchanged.
 func ApplyVocabulary(systemPrompt, rawVocabulary string) string {

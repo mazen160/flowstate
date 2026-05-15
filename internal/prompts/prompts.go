@@ -1,5 +1,5 @@
 // Package prompts embeds the canonical Flowstate system prompts and exposes
-// them by name. The strings are ported verbatim from FreeFlow so cleanup
+// them by name. The strings are ported verbatim from the upstream reference so cleanup
 // behavior matches.
 package prompts
 
@@ -14,7 +14,7 @@ var commandPrompt string
 //go:embed literal.txt
 var literalPrompt string
 
-// Default returns the FreeFlow-style cleanup prompt with self-correction,
+// Default returns the default cleanup prompt with self-correction,
 // formatting, and developer-syntax handling.
 func Default() string { return defaultPrompt }
 
@@ -23,7 +23,7 @@ func Default() string { return defaultPrompt }
 func Command() string { return commandPrompt }
 
 // Literal returns the simpler context-light cleanup prompt from the
-// FreeFlow README "Custom Cleanup" section.
+// upstream README's "Custom Cleanup" section.
 func Literal() string { return literalPrompt }
 
 // Get returns the prompt for a name. Names are lowercased before lookup.

@@ -427,7 +427,7 @@ func TestResolveAPIKey_NeitherSet_ReturnsError(t *testing.T) {
 }
 
 // TestDefaults_NewFields pins the documented defaults for the three
-// FreeFlow-parity settings ported in TASK-131.
+// settings ported in TASK-131.
 func TestDefaults_NewFields(t *testing.T) {
 	d := Defaults()
 	if d.OutputLanguage != "" {
