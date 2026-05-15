@@ -219,10 +219,9 @@ func runRecord(ctx context.Context, args []string, stdin io.Reader, stdout, stde
 	// paste in output_mode is a common foot-gun: the user expects the
 	// delayed paste behavior but the keystroke step never fires because
 	// pasteOn is false. Honor their intent — turn paste on for this run
-	// and tell them what we did so they can pin it in config if they
-	// want it persistent.
+	// silently. The downstream "Pasting in Ns — switch to destination
+	// window" reporter.Step still tells the user what's about to happen.
 	if cfg.PasteDelaySeconds > 0 && !pasteOn {
-		reporter.Warning("paste_delay_seconds is %d but paste is not in output_mode; auto-enabling paste for this run (set output_mode to include \"paste\" to silence this).", cfg.PasteDelaySeconds)
 		pasteOn = true
 	}
 	dests := output.Destinations{

@@ -215,7 +215,7 @@ func TestDone_FullStats(t *testing.T) {
 		ProcessTime: 1800 * time.Millisecond,
 	})
 	out := buf.String()
-	for _, want := range []string{"47 chars", "9 words", "~12 tokens", "rec 3.2s", "proc 1.8s", "total 5.0s"} {
+	for _, want := range []string{"47 chars", "9 words", "~12 tokens", "recording 3.2s", "processing 1.8s", "total 5.0s"} {
 		if !strings.Contains(out, want) {
 			t.Errorf("Done full-stats output missing %q:\n%s", want, out)
 		}
@@ -234,7 +234,7 @@ func TestDone_NoTimingOmitsSecondLine(t *testing.T) {
 	if lineCount != 1 {
 		t.Errorf("expected single-line output with no timing; got %d lines:\n%s", lineCount, out)
 	}
-	for _, banned := range []string{"rec ", "proc ", "total "} {
+	for _, banned := range []string{"recording ", "processing ", "total "} {
 		if strings.Contains(out, banned) {
 			t.Errorf("Done with zero timing should not mention %q:\n%s", banned, out)
 		}
@@ -264,8 +264,8 @@ func TestDone_SingleTimingFieldDropsTotal(t *testing.T) {
 	r := NewReporter(&buf, ColorNever)
 	r.Done(DoneStats{Chars: 5, ProcessTime: 2 * time.Second})
 	out := buf.String()
-	if !strings.Contains(out, "proc 2.0s") {
-		t.Errorf("expected 'proc 2.0s' in output:\n%s", out)
+	if !strings.Contains(out, "processing 2.0s") {
+		t.Errorf("expected 'processing 2.0s' in output:\n%s", out)
 	}
 	if strings.Contains(out, "total ") {
 		t.Errorf("total should not appear with only one timing field:\n%s", out)

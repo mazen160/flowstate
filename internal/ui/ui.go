@@ -303,10 +303,10 @@ func (r *Reporter) Done(s DoneStats) {
 	}
 	var timingParts []string
 	if s.RecordTime > 0 {
-		timingParts = append(timingParts, "rec "+formatDuration(s.RecordTime))
+		timingParts = append(timingParts, "recording "+formatDuration(s.RecordTime))
 	}
 	if s.ProcessTime > 0 {
-		timingParts = append(timingParts, "proc "+formatDuration(s.ProcessTime))
+		timingParts = append(timingParts, "processing "+formatDuration(s.ProcessTime))
 	}
 	if total := s.Total(); total > 0 && len(timingParts) > 1 {
 		timingParts = append(timingParts, "total "+formatDuration(total))
