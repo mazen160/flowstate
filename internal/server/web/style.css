@@ -216,6 +216,27 @@ body > * { position: relative; z-index: 1; }
   border-color: color-mix(in oklab, var(--c-cyan) 30%, var(--line-2));
 }
 
+.btn-primary {
+  border-color: color-mix(in oklab, var(--c-cyan) 42%, var(--line-2));
+  background: color-mix(in oklab, var(--c-cyan) 10%, var(--surface));
+  color: var(--text);
+  font-weight: 600;
+}
+.btn-primary:hover {
+  border-color: color-mix(in oklab, var(--c-cyan) 68%, var(--line-2));
+  background: color-mix(in oklab, var(--c-cyan) 16%, var(--surface));
+  box-shadow:
+    0 1px 0 rgba(17, 21, 31, 0.04),
+    0 8px 22px -14px rgba(14, 165, 194, 0.55);
+}
+.btn:disabled,
+.btn[aria-disabled="true"] {
+  cursor: not-allowed;
+  opacity: 0.58;
+  transform: none;
+  box-shadow: none;
+}
+
 .icon-plus, .icon-gear {
   display: inline-block;
   font-weight: 400;
@@ -249,6 +270,53 @@ kbd {
   flex-direction: column;
   gap: 56px;
 }
+
+/* ────────── authentication gate ────────── */
+
+.auth-panel {
+  display: grid;
+  gap: 18px;
+  padding: 20px 22px;
+  border: 1px solid color-mix(in oklab, var(--c-cyan) 34%, var(--line));
+  border-radius: var(--radius-sm);
+  background:
+    linear-gradient(180deg,
+      color-mix(in oklab, var(--c-cyan) 8%, var(--surface)) 0%,
+      var(--surface) 100%);
+  box-shadow:
+    0 1px 0 rgba(17, 21, 31, 0.025),
+    0 18px 34px -28px rgba(14, 165, 194, 0.42);
+}
+.auth-panel[hidden] { display: none; }
+.auth-copy h2 {
+  margin: 6px 0 4px;
+  font-size: 21px;
+  line-height: 1.25;
+  letter-spacing: 0;
+}
+.auth-copy p {
+  margin: 0;
+  color: var(--text-2);
+  font-size: 14px;
+  line-height: 1.55;
+}
+.auth-form {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 12px;
+  align-items: end;
+}
+.auth-token-field { min-width: 0; }
+.field-help {
+  margin: 0;
+  min-height: 1.35em;
+  color: var(--text-3);
+  font-size: 13px;
+  line-height: 1.45;
+}
+.field-help[data-variant="success"] { color: var(--c-cyan); }
+.field-help[data-variant="warn"] { color: var(--c-pink); }
+.field-help[data-variant="error"] { color: #c33b3b; }
 
 /* ────────── recorder ────────── */
 
@@ -287,6 +355,14 @@ kbd {
 }
 .rec-btn:active { transform: scale(0.97); }
 .rec-btn:focus-visible { outline: 2px solid var(--focus); outline-offset: 5px; }
+.rec-btn:disabled {
+  cursor: not-allowed;
+  opacity: 0.56;
+  transform: none;
+  box-shadow:
+    0 1px 0 rgba(17, 21, 31, 0.025),
+    0 8px 20px -18px rgba(17, 21, 31, 0.25);
+}
 
 /* Outer ring sits just inside the rim — soft, very subtle in idle. */
 .rec-ring {
@@ -675,6 +751,44 @@ kbd {
 @media (min-width: 540px) {
   .settings-grid { grid-template-columns: 1fr 1fr; gap: 18px; }
 }
+.settings-auth {
+  display: grid;
+  gap: 8px;
+}
+.settings-auth-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+.status-pill {
+  display: inline-flex;
+  align-items: center;
+  min-height: 24px;
+  padding: 3px 9px;
+  border-radius: 999px;
+  border: 1px solid var(--line-2);
+  background: var(--surface);
+  color: var(--text-3);
+  font: 12px/1.2 var(--mono);
+  white-space: nowrap;
+}
+.status-pill[data-variant="success"] {
+  color: var(--c-cyan);
+  border-color: color-mix(in oklab, var(--c-cyan) 42%, var(--line-2));
+  background: color-mix(in oklab, var(--c-cyan) 8%, var(--surface));
+}
+.status-pill[data-variant="warn"],
+.status-pill[data-variant="error"] {
+  color: var(--c-pink);
+  border-color: color-mix(in oklab, var(--c-pink) 42%, var(--line-2));
+  background: color-mix(in oklab, var(--c-pink) 8%, var(--surface));
+}
+.token-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 10px;
+}
 .field {
   display: grid;
   gap: 7px;
@@ -686,7 +800,7 @@ kbd {
   letter-spacing: 0.06em;
   text-transform: uppercase;
 }
-.field input, .field select {
+.field input, .field select, .token-row input {
   background: var(--surface);
   color: var(--text);
   border: 1px solid var(--line-2);
@@ -694,8 +808,9 @@ kbd {
   padding: 10px 12px;
   font: 14px/1.4 inherit;
   font-family: inherit;
+  min-width: 0;
 }
-.field input:focus, .field select:focus {
+.field input:focus, .field select:focus, .token-row input:focus {
   outline: none;
   border-color: var(--c-cyan);
   background: var(--surface);
@@ -904,6 +1019,15 @@ kbd {
   .page { padding: 36px 18px 110px; gap: 40px; }
   .topbar-inner, .dock-inner { padding-left: 18px; padding-right: 18px; }
   .brand-tag { display: none; }
+  .auth-panel { padding: 18px; }
+  .auth-form,
+  .token-row {
+    grid-template-columns: 1fr;
+  }
+  .auth-form .btn,
+  .token-row .btn {
+    justify-content: center;
+  }
   .rec-btn { width: 152px; height: 152px; }
   .rec-icon svg { width: 78px; height: 40px; }
   .rec-meter { gap: 6px; }
@@ -941,9 +1065,17 @@ kbd {
   }
   .btn { box-shadow: none; background: var(--surface-2); }
   .btn:hover { background: var(--surface-3); box-shadow: 0 4px 14px -8px rgba(176, 112, 247, 0.4); }
+  .btn-primary { background: color-mix(in oklab, var(--c-cyan) 13%, var(--surface-2)); }
+  .btn-primary:hover { background: color-mix(in oklab, var(--c-cyan) 18%, var(--surface-3)); }
   .btn-ghost { background: transparent; }
   .btn-ghost:hover { background: var(--surface-2); }
   kbd { background: var(--surface-2); box-shadow: none; }
+  .auth-panel {
+    background:
+      linear-gradient(180deg,
+        color-mix(in oklab, var(--c-cyan) 10%, var(--surface)) 0%,
+        var(--surface) 100%);
+  }
   .rec-btn {
     background: radial-gradient(circle at 50% 30%, var(--surface-3) 0%, var(--surface) 70%);
     box-shadow:
@@ -960,7 +1092,8 @@ kbd {
   .result-card { background: var(--surface); }
   .copy-btn { background: transparent; }
   .copy-btn:hover { background: var(--surface-2); }
-  .field input, .field select { background: var(--surface-2); }
+  .field input, .field select, .token-row input { background: var(--surface-2); }
+  .status-pill { background: var(--surface-2); }
   .toggle-row { background: var(--surface-2); }
   .settings-sheet { background: var(--surface); }
   .btn-danger { background: transparent; color: #f08585; border-color: color-mix(in oklab, #f08585 35%, var(--line-2)); }

@@ -79,6 +79,25 @@
 </header>
 
 <main class="page">
+  <section id="auth-panel" class="auth-panel" aria-labelledby="auth-title" hidden>
+    <div class="auth-copy">
+      <span class="section-label">Authentication</span>
+      <h2 id="auth-title">Token required</h2>
+      <p>This server was started with a web token. Save it once for this browser to enable recording.</p>
+    </div>
+    <form id="auth-form" class="auth-form">
+      <label class="field auth-token-field">
+        <span class="field-label">Web token</span>
+        <input id="auth-token-input" class="token-input" type="password" autocomplete="new-password"
+               inputmode="text" autocapitalize="off" autocorrect="off" spellcheck="false"
+               data-1p-ignore="true" data-lpignore="true" data-bwignore="true" data-form-type="other"
+               placeholder="Paste the token from the server startup command">
+      </label>
+      <button id="auth-save-token" class="btn btn-primary" type="submit">Save token</button>
+    </form>
+    <p id="auth-status" class="field-help auth-status" role="status" aria-live="polite"></p>
+  </section>
+
   <section class="recorder" aria-labelledby="rec-heading">
     <h1 id="rec-heading" class="visually-hidden">Record</h1>
 
@@ -158,11 +177,22 @@
   </div>
   <div id="settings" class="settings-sheet" hidden>
     <div class="settings-grid">
-      <label class="field">
-        <span class="field-label">API token</span>
-        <input id="token-input" type="password" autocomplete="off" spellcheck="false"
-               placeholder="Bearer token (only if the server requires one)">
-      </label>
+      <div class="settings-auth">
+        <div class="settings-auth-head">
+          <span class="field-label">API token</span>
+          <span id="token-state" class="status-pill">Not checked</span>
+        </div>
+        <form id="settings-token-form" class="token-row">
+          <input id="token-input" class="token-input" type="password" autocomplete="new-password"
+                 inputmode="text" autocapitalize="off" autocorrect="off" spellcheck="false"
+                 data-1p-ignore="true" data-lpignore="true" data-bwignore="true" data-form-type="other"
+                 placeholder="Paste web token">
+          <button id="settings-save-token" class="btn btn-primary" type="submit">Save</button>
+        </form>
+        <p id="token-status" class="field-help" role="status" aria-live="polite">
+          Token changes are saved only when you press Save.
+        </p>
+      </div>
       <label class="field">
         <span class="field-label">Switch session</span>
         <select id="session-select"></select>

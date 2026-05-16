@@ -28,7 +28,7 @@ import (
 // Untagged `make build` from a clean tree reads the latest tag via
 // `git describe --tags`, so this constant only surfaces in builds made
 // without the Makefile.
-var version = "1.0.0"
+var version = "1.0.1"
 
 // helpText is what `flowstate --help` (and `flowstate -h`) prints. Short by
 // design: details live in the man-page-style README, not in --help.

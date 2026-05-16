@@ -273,6 +273,55 @@ func TestServer_TokenAuthEnforced_200(t *testing.T) {
 	}
 }
 
+// TestServer_PingValidatesAuth covers the lightweight endpoint the web UI
+// uses before saving a token in localStorage.
+func TestServer_PingValidatesAuth(t *testing.T) {
+	upstream := fakeGroq(t)
+	defer upstream.Close()
+	s := newTestServer(t, upstream.URL, "secret")
+	base, _ := startListening(t, s)
+
+	resp, err := http.Get(base + "/api/ping")
+	if err != nil {
+		t.Fatalf("GET /api/ping without token: %v", err)
+	}
+	resp.Body.Close()
+	if resp.StatusCode != http.StatusUnauthorized {
+		t.Fatalf("status = %d; want 401 without token", resp.StatusCode)
+	}
+
+	req, _ := http.NewRequest(http.MethodGet, base+"/api/ping", nil)
+	req.Header.Set("Authorization", "Bearer wrong")
+	resp, err = http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatalf("GET /api/ping wrong token: %v", err)
+	}
+	resp.Body.Close()
+	if resp.StatusCode != http.StatusUnauthorized {
+		t.Fatalf("status = %d; want 401 for wrong token", resp.StatusCode)
+	}
+
+	req, _ = http.NewRequest(http.MethodGet, base+"/api/ping", nil)
+	req.Header.Set("Authorization", "Bearer secret")
+	resp, err = http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatalf("GET /api/ping correct token: %v", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("status = %d; want 200 for correct token", resp.StatusCode)
+	}
+	var body struct {
+		OK bool `json:"ok"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&body); err != nil {
+		t.Fatalf("decode ping: %v", err)
+	}
+	if !body.OK {
+		t.Fatalf("ping ok = false; want true")
+	}
+}
+
 // TestServer_NoTokenAcceptsAll verifies the no-op middleware behavior:
 // when Options.Token is empty, every request reaches the handler.
 func TestServer_NoTokenAcceptsAll(t *testing.T) {

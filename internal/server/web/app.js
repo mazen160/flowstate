@@ -16,7 +16,16 @@
   var S = {
     sessions: [],
     currentSessionId: null,
-    token: ''
+    token: '',
+    autoCopy: false,
+    authRequired: false,
+    authChecked: false
+  };
+
+  var AUTH = {
+    saving: false,
+    statusMessage: '',
+    statusVariant: ''
   };
 
   var REC = {
@@ -46,6 +55,7 @@
   var METER_BARS = 7;
 
   var SESSION_REUSE_MS = 30 * 60 * 1000;
+  var DEFAULT_REC_HINT = '';
 
   function loadState() {
     try {
@@ -123,6 +133,237 @@
   // ---- DOM helpers ---------------------------------------------------
 
   var $ = function (id) { return document.getElementById(id); };
+
+  // ---- Auth token UX -------------------------------------------------
+
+  function tokenInputs() {
+    var out = [];
+    var top = $('auth-token-input');
+    var settings = $('token-input');
+    if (top) out.push(top);
+    if (settings) out.push(settings);
+    return out;
+  }
+
+  function getTokenDraft() {
+    var inputs = tokenInputs();
+    for (var i = 0; i < inputs.length; i++) {
+      if (document.activeElement === inputs[i]) return inputs[i].value;
+    }
+    return inputs.length ? inputs[0].value : S.token;
+  }
+
+  function setTokenDraft(value, source) {
+    var inputs = tokenInputs();
+    for (var i = 0; i < inputs.length; i++) {
+      if (inputs[i] !== source) inputs[i].value = value || '';
+    }
+  }
+
+  function setAuthStatus(message, variant) {
+    AUTH.statusMessage = message || '';
+    AUTH.statusVariant = variant || '';
+    refreshAuthUI();
+  }
+
+  function effectiveAuthStatus() {
+    var draft = (getTokenDraft() || '').trim();
+    if (AUTH.saving) return { message: 'Checking token...', variant: 'info' };
+    if (AUTH.statusMessage) {
+      return { message: AUTH.statusMessage, variant: AUTH.statusVariant };
+    }
+    if (draft !== S.token) {
+      return { message: 'Token has unsaved changes.', variant: 'info' };
+    }
+    if (S.authRequired && !S.token) {
+      return { message: 'Enter the web token to enable recording.', variant: 'warn' };
+    }
+    if (S.authRequired && S.token) {
+      return { message: 'Token saved in this browser.', variant: 'success' };
+    }
+    return { message: 'No token required for this server.', variant: 'info' };
+  }
+
+  function isAuthBlocked() {
+    return S.authRequired && !S.token;
+  }
+
+  function openAuthPanel(focusInput) {
+    var panel = $('auth-panel');
+    if (!panel) return;
+    panel.hidden = false;
+    if (focusInput) {
+      var input = $('auth-token-input');
+      setTimeout(function () {
+        panel.scrollIntoView({ block: 'start', behavior: 'smooth' });
+        if (input) input.focus({ preventScroll: true });
+      }, 0);
+    }
+  }
+
+  function refreshAuthUI() {
+    var blocked = isAuthBlocked();
+    var panel = $('auth-panel');
+    if (panel) panel.hidden = !blocked;
+
+    var rec = $('rec');
+    if (rec) {
+      rec.disabled = blocked;
+      rec.setAttribute('aria-disabled', blocked ? 'true' : 'false');
+    }
+
+    var hint = $('rec-hint');
+    if (hint) {
+      if (!DEFAULT_REC_HINT) DEFAULT_REC_HINT = hint.textContent;
+      hint.textContent = blocked ? 'Save the server token to enable recording.' : DEFAULT_REC_HINT;
+    }
+
+    var draft = (getTokenDraft() || '').trim();
+    var dirty = draft !== S.token;
+    var canSave = !AUTH.saving && dirty && (draft.length > 0 || S.token);
+    var topSave = $('auth-save-token');
+    var settingsSave = $('settings-save-token');
+    if (topSave) {
+      topSave.disabled = !canSave;
+      topSave.textContent = AUTH.saving ? 'Saving...' : 'Save token';
+    }
+    if (settingsSave) {
+      settingsSave.disabled = !canSave;
+      settingsSave.textContent = AUTH.saving ? 'Saving...' : 'Save';
+    }
+
+    var pill = $('token-state');
+    if (pill) {
+      var label = 'Auth off';
+      var variant = 'info';
+      if (S.authRequired && S.token) {
+        label = 'Saved';
+        variant = 'success';
+      } else if (S.authRequired) {
+        label = 'Required';
+        variant = 'warn';
+      } else if (!S.authChecked) {
+        label = 'Checking';
+        variant = 'info';
+      }
+      pill.textContent = label;
+      pill.setAttribute('data-variant', variant);
+    }
+
+    var status = effectiveAuthStatus();
+    var ids = ['auth-status', 'token-status'];
+    for (var i = 0; i < ids.length; i++) {
+      var el = $(ids[i]);
+      if (!el) continue;
+      el.textContent = status.message;
+      if (status.variant) el.setAttribute('data-variant', status.variant);
+      else el.removeAttribute('data-variant');
+    }
+  }
+
+  async function validateToken(token) {
+    var headers = {};
+    if (token) headers['Authorization'] = 'Bearer ' + token;
+    var resp = await fetch('/api/ping', {
+      method: 'GET',
+      headers: headers,
+      cache: 'no-store'
+    });
+    if (resp.status === 401) return false;
+    if (!resp.ok) throw new Error('HTTP ' + resp.status);
+    return true;
+  }
+
+  async function saveTokenFrom(input) {
+    if (!input || AUTH.saving) return;
+    var token = input.value.trim();
+    input.value = token;
+    setTokenDraft(token, input);
+
+    if (!token) {
+      S.token = '';
+      persist();
+      input.value = '';
+      setTokenDraft('', input);
+      setAuthStatus(
+        S.authRequired ? 'Token cleared. Enter a token to enable recording.' : 'Token cleared.',
+        S.authRequired ? 'warn' : 'info'
+      );
+      if (S.authRequired) openAuthPanel(true);
+      showToast('API token cleared', {
+        desc: S.authRequired ? 'Recording is locked until a valid token is saved.' : 'No token is stored locally.',
+        variant: 'info',
+        icon: '✓'
+      });
+      return;
+    }
+
+    AUTH.saving = true;
+    AUTH.statusMessage = '';
+    AUTH.statusVariant = '';
+    refreshAuthUI();
+    try {
+      var ok = await validateToken(token);
+      if (!ok) {
+        setAuthStatus('Token was not accepted. Check it and try again.', 'error');
+        if (!S.token) openAuthPanel(true);
+        showToast('Token not accepted', {
+          desc: 'The server rejected that web token.',
+          variant: 'warn',
+          icon: '!'
+        });
+        return;
+      }
+      S.token = token;
+      persist();
+      input.value = S.token;
+      setTokenDraft(S.token, input);
+      setAuthStatus('Token saved. Recording is enabled.', 'success');
+      showToast('API token saved', {
+        desc: 'This browser will use it for authenticated requests.',
+        variant: 'success',
+        icon: '✓'
+      });
+    } catch (e) {
+      setAuthStatus('Could not verify the token. Check that the server is still running.', 'error');
+      showToast('Token check failed', {
+        desc: e && e.message ? e.message : 'The server did not answer /api/ping.',
+        variant: 'warn',
+        icon: '!'
+      });
+    } finally {
+      AUTH.saving = false;
+      refreshAuthUI();
+    }
+  }
+
+  async function verifySavedToken() {
+    if (!S.authRequired || !S.token) return;
+    setAuthStatus('Checking saved token...', 'info');
+    try {
+      var ok = await validateToken(S.token);
+      if (ok) {
+        S.authChecked = true;
+        setAuthStatus('Token saved. Recording is enabled.', 'success');
+        return;
+      }
+      var rejected = S.token;
+      S.token = '';
+      persist();
+      setTokenDraft(rejected);
+      S.authChecked = true;
+      setAuthStatus('Saved token was rejected. Paste the current server token.', 'error');
+      openAuthPanel(true);
+      showToast('Token needs attention', {
+        desc: 'The saved token no longer unlocks this server.',
+        variant: 'warn',
+        icon: '!'
+      });
+    } catch (e) {
+      S.authChecked = true;
+      setAuthStatus('Could not verify the saved token. Recording may fail until the server responds.', 'warn');
+    }
+  }
 
   // ---- Toasts --------------------------------------------------------
   //
@@ -686,7 +927,6 @@
       return;
     }
     var session = currentSession() || createSession();
-    var didRetry = false;
     var send = async function () {
       var fd = new FormData();
       fd.append('audio', blob, 'recording.' + ext);
@@ -698,14 +938,24 @@
     };
     try {
       var resp = await send();
-      if (resp.status === 401 && !didRetry) {
-        didRetry = true;
-        var t = window.prompt('Server requires an API token. Enter it now:');
-        if (t) {
-          S.token = t.trim();
-          persist();
-          resp = await send();
-        }
+      if (resp.status === 401) {
+        var rejected = S.token;
+        S.authRequired = true;
+        S.authChecked = true;
+        S.token = '';
+        persist();
+        if (rejected) setTokenDraft(rejected);
+        setRecState('idle');
+        $('rec-status').textContent = 'Authentication required. Save the token, then record again.';
+        setAuthStatus('The server rejected the saved token. Paste the current web token.', 'error');
+        openAuthPanel(true);
+        showToast('Authentication required', {
+          desc: 'Save the web token before recording.',
+          variant: 'warn',
+          icon: '!',
+          duration: 6000
+        });
+        return;
       }
       if (!resp.ok) {
         var err = await safeJSON(resp);
@@ -827,6 +1077,11 @@
   var HOLD_THRESHOLD_MS = 320;
 
   function pressRecord() {
+    if (isAuthBlocked()) {
+      setAuthStatus('Enter the web token to enable recording.', 'warn');
+      openAuthPanel(true);
+      return;
+    }
     if (REC.state === 'uploading') return;     // ignore presses during upload
     if (REC.state === 'recording') {
       // A second press while already recording is the user explicitly
@@ -907,6 +1162,7 @@
   }
 
   function bindUI() {
+    DEFAULT_REC_HINT = $('rec-hint') ? $('rec-hint').textContent : '';
     $('new-session').addEventListener('click', function () {
       createSession();
       rerender();
@@ -915,35 +1171,48 @@
     $('export-md').addEventListener('click', exportMarkdown);
     $('toggle-settings').addEventListener('click', function () {
       var s = $('settings');
-      var open = !s.hidden;
-      s.hidden = open;
-      this.setAttribute('aria-expanded', open ? 'false' : 'true');
-      // When opening (open was true → we just flipped to !hidden), move
+      var wasOpen = !s.hidden;
+      s.hidden = wasOpen;
+      this.setAttribute('aria-expanded', wasOpen ? 'false' : 'true');
+      // When opening (wasOpen was false → we just made it visible), move
       // focus into the drawer so keyboard users can immediately tab
       // through it. We focus the token input because it's the field
       // most users came here to edit. The setTimeout deferral lets the
       // browser apply the unhide before we focus — otherwise some
       // browsers refuse to focus a still-hidden element.
-      if (open) {
-        var tokenInput = $('token-input');
-        if (tokenInput) {
-          setTimeout(function () { tokenInput.focus({ preventScroll: false }); }, 0);
+      if (!wasOpen) {
+        var focusTarget = S.authRequired ? $('token-input') : $('session-select');
+        if (focusTarget) {
+          setTimeout(function () { focusTarget.focus({ preventScroll: false }); }, 0);
         }
       }
     });
-    $('token-input').value = S.token;
-    $('token-input').addEventListener('change', function () {
-      S.token = this.value.trim();
-      persist();
-      // Token changes fire on blur (the 'change' event), so each save
-      // is a deliberate user action — toast every time so they know
-      // it landed.
-      showToast('Settings saved', {
-        desc: S.token ? 'API token stored locally.' : 'API token cleared.',
-        variant: 'info',
-        icon: '✓'
+    var authInput = $('auth-token-input');
+    var settingsTokenInput = $('token-input');
+    var bindTokenInput = function (input) {
+      if (!input) return;
+      input.value = S.token;
+      input.addEventListener('input', function () {
+        AUTH.statusMessage = '';
+        AUTH.statusVariant = '';
+        setTokenDraft(this.value, this);
+        refreshAuthUI();
       });
-    });
+    };
+    bindTokenInput(authInput);
+    bindTokenInput(settingsTokenInput);
+
+    var bindTokenForm = function (form, input) {
+      if (!form || !input) return;
+      form.addEventListener('submit', function (ev) {
+        ev.preventDefault();
+        saveTokenFrom(input);
+      });
+    };
+    bindTokenForm($('auth-form'), authInput);
+    bindTokenForm($('settings-token-form'), settingsTokenInput);
+    refreshAuthUI();
+
     $('session-select').addEventListener('change', function () {
       S.currentSessionId = this.value;
       persist();
@@ -1028,6 +1297,27 @@
       var bits = ['flowstate ' + (info.version || 'dev')];
       bits.push(info.auth_required ? 'auth: required' : 'auth: off');
       $('version-line').textContent = bits.join(' · ');
+      S.authRequired = !!info.auth_required;
+      S.authChecked = true;
+      AUTH.statusMessage = '';
+      AUTH.statusVariant = '';
+      refreshAuthUI();
+      if (S.authRequired && !S.token) {
+        setAuthStatus('Enter the web token to enable recording.', 'warn');
+        openAuthPanel(true);
+        showToast('API token required', {
+          desc: 'This server requires authentication before recording.',
+          variant: 'warn',
+          icon: '!',
+          duration: 6000
+        });
+      } else if (S.authRequired && S.token) {
+        verifySavedToken();
+      } else {
+        setAuthStatus(S.token
+          ? 'This server does not require a token. The saved token will stay local.'
+          : 'No token required for this server.', 'info');
+      }
     } catch (e) { /* offline-OK */ }
   }
 

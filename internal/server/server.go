@@ -172,6 +172,10 @@ func (s *Server) registerRoutes(mux *http.ServeMux) {
 	// endpoint deliberately kept reachable for liveness checks.
 	mux.Handle("/api/health", http.HandlerFunc(s.handleHealth))
 	mux.Handle("/api/info", http.HandlerFunc(s.handleInfo))
+	// /api/ping is an authenticated endpoint the login screen calls to
+	// validate a token before persisting it. Public routes (health, info)
+	// can't serve this purpose — they don't go through authMiddleware.
+	mux.Handle("/api/ping", s.authMiddleware(http.HandlerFunc(s.handlePing)))
 	// /api/transcribe is the only request path that spends Groq tokens
 	// and accesses user audio. Both layers wrap it: auth (no-op when
 	// Token is empty) and per-IP rate limiting (always on).

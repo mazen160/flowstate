@@ -62,6 +62,22 @@ func writeJSONError(w http.ResponseWriter, status int, msg string) {
 	writeJSON(w, status, errorResponse{Error: msg})
 }
 
+// handlePing is an authenticated liveness check the login screen uses to
+// validate a Bearer token before persisting it in localStorage. Returns
+// {"ok": true} when the token is accepted; the auth middleware handles 401.
+// When Token is empty (no auth configured), the middleware is a no-op and
+// ping returns 200 for any caller — the login gate is never shown in that
+// case so this is harmless.
+func (s *Server) handlePing(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		writeJSONError(w, http.StatusMethodNotAllowed, "method not allowed")
+		return
+	}
+	writeJSON(w, http.StatusOK, struct {
+		OK bool `json:"ok"`
+	}{OK: true})
+}
+
 // handleHealth returns 200 + {"ok": true, "version": "..."} — a tiny probe
 // for liveness checks and curl smoke tests.
 func (s *Server) handleHealth(w http.ResponseWriter, r *http.Request) {

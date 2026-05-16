@@ -125,7 +125,7 @@ The pipeline is shared between the CLI (`flowstate`) and the web server (`flowst
 
 ## Status
 
-**v1.0.0**, released and tagged. Tested on macOS, Linux, and Windows; the audio capture, paste-as-keystrokes, and web UI paths have been hand-exercised across the three platforms. Bug reports, recipes, and PRs welcome, see [Contributing](#contributing).
+**v1.0.1**, released and tagged. Tested on macOS, Linux, and Windows; the audio capture, paste-as-keystrokes, and web UI paths have been hand-exercised across the three platforms. Bug reports, recipes, and PRs welcome, see [Contributing](#contributing).
 
 ## Install
 
@@ -301,9 +301,10 @@ The web UI is a thin client over a minimal JSON API. You can call these directly
 |---|---|---|
 | `GET`  | `/api/health`     | Liveness probe. Returns `{"ok": true, "version": "..."}`. |
 | `GET`  | `/api/info`       | `{"version": "...", "auth_required": true|false}`. The frontend reads this once on load to decide whether to show the token field. |
+| `GET`  | `/api/ping`       | Authenticated token check. Returns `{"ok": true}` when the supplied Bearer token is accepted. |
 | `POST` | `/api/transcribe` | Multipart upload. One field: `audio` (the recorded blob, any browser-supported codec). Returns `{"raw": "...", "cleaned": "...", "duration_ms": 1234}`. |
 
-Auth is a single Bearer token. When `--web-token` (or `FLOWSTATE_WEB_TOKEN`) is set, `/api/transcribe` requires `Authorization: Bearer <token>`. `/api/health` and `/api/info` are intentionally **always public**. The frontend reads `/api/info` to discover whether auth is required, and `/health` is a probe endpoint kept reachable for liveness checks.
+Auth is a single Bearer token. When `--web-token` (or `FLOWSTATE_WEB_TOKEN`) is set, `/api/ping` and `/api/transcribe` require `Authorization: Bearer <token>`. `/api/health` and `/api/info` are intentionally **always public**. The frontend reads `/api/info` to discover whether auth is required, uses `/api/ping` to verify the token before saving it locally, and keeps `/api/health` reachable for liveness checks.
 
 ```sh
 # Health check (always works, no token)
@@ -311,7 +312,11 @@ curl http://127.0.0.1:8585/api/health
 
 # Discover auth state (always works, no token)
 curl http://127.0.0.1:8585/api/info
-# {"version": "1.0.0", "auth_required": true}
+# {"version": "1.0.1", "auth_required": true}
+
+# Verify the web token before storing it
+curl http://127.0.0.1:8585/api/ping \
+     -H "Authorization: Bearer $FLOWSTATE_WEB_TOKEN"
 
 # Transcribe a clip
 curl -X POST http://127.0.0.1:8585/api/transcribe \

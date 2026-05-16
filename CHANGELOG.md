@@ -6,6 +6,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.0.1] — 2026-05-16
+
 ### Added
 - `--silent` flag on the record command. Suppresses every stderr message
   (status, warnings, errors) so a `flowstate --silent | pbcopy` pipeline
@@ -16,6 +18,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   previous "print the URL and wait" behavior. The open command is per-OS
   (`open` on macOS, `rundll32 url.dll,FileProtocolHandler` on Windows,
   `xdg-open` with a `sensible-browser` fallback on Linux).
+- Web UI auth gate for servers started with `--web-token` or
+  `FLOWSTATE_WEB_TOKEN`. When auth is required and no token is saved, the
+  page now opens with a focused token prompt before recording is available.
+- Explicit Save buttons for the first-run auth prompt and Settings token
+  field. Token edits are no longer persisted on blur.
+- `GET /api/ping` authenticated token-check endpoint. The web UI validates
+  a token before storing it in `localStorage`.
+
+### Improved
+- Replace the blocking browser token prompt after a failed transcription
+  with in-page auth recovery, status text, and toast feedback.
+- Verify a previously saved web token on page load and reopen the auth
+  prompt if the server rejects it.
+- Fix the Settings drawer toggle so opening Settings focuses the intended
+  control instead of only focusing while closing.
+- Wrap Linux CI tests in `xvfb-run` so `gohook` can initialize
+  `XOpenDisplay` on headless GitHub Actions runners.
 
 ## [1.0.0] — 2026-05-15
 
