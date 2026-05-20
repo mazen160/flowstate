@@ -110,6 +110,12 @@ func TestIsFallbackTrigger(t *testing.T) {
 			want:   true,
 		},
 		{
+			name:   "ydotool uinput device open failure (standalone mode crash)",
+			tool:   "ydotool",
+			stderr: "ydotool: notice: ydotoold backend unavailable (may have latency+delay issues)\nterminate called after throwing an instance of 'std::runtime_error'\n  what():  failed to open uinput device",
+			want:   true,
+		},
+		{
 			name:   "ydotool permission denied (real user-actionable error)",
 			tool:   "ydotool",
 			stderr: "open /dev/uinput: permission denied",

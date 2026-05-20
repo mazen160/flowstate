@@ -120,10 +120,12 @@ func isFallbackTrigger(name, stderr string) bool {
 		// is stable across wtype releases.
 		return strings.Contains(stderr, "Compositor does not support the virtual keyboard protocol")
 	case "ydotool":
-		// ydotoold isn't running or the socket isn't reachable. Both
-		// strings come from ydotool's own error paths.
+		// ydotoold isn't running or the socket isn't reachable, or
+		// standalone mode can't open /dev/uinput (missing permissions).
+		// All three mean ydotool can't work in this environment.
 		return strings.Contains(stderr, "failed to connect socket") ||
-			strings.Contains(stderr, "No such file or directory")
+			strings.Contains(stderr, "No such file or directory") ||
+			strings.Contains(stderr, "failed to open uinput device")
 	case "xdotool":
 		// Running on Wayland with no XWayland: xdotool can't reach an
 		// X display. Worth falling back to anything still untried.

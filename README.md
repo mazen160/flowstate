@@ -195,15 +195,26 @@ For `output_mode = paste`, flowstate tries autotype tools in order until one wor
 - **Wayland**: `wtype` → `ydotool` → `xdotool` (XWayland fallback).
 - **X11**: `xdotool` → `ydotool` → `wtype`.
 
-`wtype` is the lightest option but only works on compositors that implement `wlr-virtual-keyboard-unstable-v1` — i.e. wlroots-based ones (Sway, Hyprland, river). On GNOME or KDE Plasma it exits with `Compositor does not support the virtual keyboard protocol`; flowstate detects that and automatically falls through to the next tool. Install `ydotool` for those:
+`wtype` is the lightest option but only works on compositors that implement `wlr-virtual-keyboard-unstable-v1` — i.e. wlroots-based ones (Sway, Hyprland, river). On GNOME or KDE Plasma it exits with `Compositor does not support the virtual keyboard protocol`; flowstate detects that and automatically falls through to the next tool.
+
+On GNOME or KDE Plasma (which don't implement the wlr protocol), `ydotool` is the only option that can actually reach native Wayland windows — `xdotool` runs but silently does nothing for them, because it can only talk to XWayland clients. To make `ydotool` work you need write access to `/dev/uinput`, which is root-only by default. The one-time setup:
 
 ```sh
-sudo apt install ydotool        # binary + daemon
-sudo systemctl enable --now ydotoold
-sudo usermod -aG input "$USER"  # log out + back in for group to apply
+sudo apt install ydotool
+
+# Give the input group access to /dev/uinput and add yourself to it.
+echo 'KERNEL=="uinput", GROUP="input", MODE="0660"' \
+    | sudo tee /etc/udev/rules.d/99-uinput.rules
+sudo udevadm control --reload-rules && sudo udevadm trigger
+sudo usermod -aG input "$USER"
+
+# Log out and back in so the group membership takes effect, then verify:
+ls -la /dev/uinput   # should show: crw-rw---- root input
 ```
 
-If you'd rather not deal with autotype at all, use `output_mode = "stdout,clipboard"` and press Ctrl+V yourself.
+After that ydotool's standalone mode works out of the box. Optionally start `ydotoold` for slightly lower latency (`sudo systemctl enable --now ydotoold`) — flowstate will use the daemon socket automatically when present.
+
+**Prefer not to configure any of this?** Use `output_mode = "stdout,clipboard"` (the default) and press Ctrl+V yourself. The transcript still lands on your clipboard, just without the simulated keystroke. On GNOME/KDE Wayland this is the only zero-setup option.
 
 </details>
 
@@ -643,7 +654,7 @@ The web UI replaces these with on-page state (waveform meter, ring pulse, status
 | Audio capture (CLI)    | built-in                           | built-in (PulseAudio / PipeWire)        | built-in (WASAPI)      |
 | Audio capture (web)    | browser mic permission             | browser mic permission                  | browser mic permission |
 | `mute_while_recording` | `osascript` (built-in)             | `pactl` (PulseAudio) or `amixer` (ALSA) | built-in (Core Audio)  |
-| `output_mode = paste`  | Accessibility permission for the terminal running flowstate | `wtype` (Wayland) or `xdotool` (X11)    | built-in (`SendInput`) |
+| `output_mode = paste`  | Accessibility permission for the terminal running flowstate | `xdotool` (X11); `wtype` on wlroots compositors; `ydotool` + `/dev/uinput` access on GNOME/KDE Wayland | built-in (`SendInput`) |
 | Push-to-talk (CLI)     | Accessibility permission           | (X11/Wayland keyboard hook libs)        | built-in               |
 | Push-to-talk (web)     | none, browser handles it          | none                                    | none                   |
 
@@ -661,6 +672,10 @@ The web UI replaces these with on-page state (waveform meter, ring pulse, status
 **`no input devices found` on `flowstate devices`**, the OS has no microphones registered. On macOS, check **System Settings → Privacy & Security → Microphone** and grant the terminal app permission. On Linux, verify `pactl list short sources` shows at least one source.
 
 **Paste doesn't paste anything on macOS**, your terminal hasn't been granted Accessibility permission. Toggle it off and back on under **System Settings → Privacy & Security → Accessibility**, then re-run flowstate. The permission applies to the terminal application, not the flowstate binary itself.
+
+**`paste failed: ydotool exited non-zero: ... failed to open uinput device` (Linux)**, `ydotool` couldn't open `/dev/uinput` because the device is root-only and your user isn't in the `input` group. flowstate now falls through to the next autotype tool when it sees this, but on GNOME/KDE Wayland that fallback (`xdotool`) silently does nothing for native Wayland windows. Fix the underlying permission so ydotool itself works — see the [Linux install section](#install) for the one-time udev + group commands.
+
+**Paste succeeds (no error) but nothing appears in the destination window (Linux/Wayland)**, `xdotool` returned `0` but the focused window is a native Wayland app, which xdotool can't reach. The transcript is still on your clipboard, so Ctrl+V works. For real auto-paste on GNOME/KDE Wayland you need `ydotool` with `/dev/uinput` access (see [Linux install section](#install)); on Sway/Hyprland/river, `wtype` works without extra setup.
 
 **`Audio too large (HTTP 413). Try a shorter recording.`**, Groq's transcription endpoint caps uploads at 25 MB. At PCM16 mono 16 kHz that's about 13 minutes of audio. Stop and restart for long-form dictation. The web UI surfaces the same limit on `/api/transcribe`.
 
