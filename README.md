@@ -164,16 +164,31 @@ For the web UI, the browser will ask for microphone permission the first time yo
 <details>
 <summary><b>Linux</b></summary>
 
-On Debian/Ubuntu-based distributions:
+On Debian/Ubuntu-based distributions, install a C toolchain plus the X11, xkbcommon, and ALSA headers that `gohook` and `malgo` link against. Missing any one of these surfaces as a `fatal error: <header>.h: No such file or directory` during `go build`.
 
 ```sh
 sudo apt-get update
 sudo apt-get install -y \
+    build-essential pkg-config \
     libasound2-dev \
-    libx11-dev libxkbcommon-dev libxtst-dev libxinerama-dev libxrandr-dev \
+    libx11-dev libx11-xcb-dev libxtst-dev libxt-dev \
+    libxkbcommon-dev libxkbcommon-x11-dev \
+    libxinerama-dev libxrandr-dev libxcursor-dev libxi-dev \
     pulseaudio-utils alsa-utils
 go install github.com/mazen160/flowstate/cmd/flowstate@latest
 ```
+
+Header-to-package cheat sheet if a build still fails on a missing include:
+
+| Missing header | Install |
+|---|---|
+| `X11/Xlib.h` | `libx11-dev` |
+| `X11/Xlib-xcb.h` | `libx11-xcb-dev` |
+| `xkbcommon/xkbcommon.h` | `libxkbcommon-dev` |
+| `xkbcommon/xkbcommon-x11.h` | `libxkbcommon-x11-dev` |
+| `X11/extensions/XTest.h` | `libxtst-dev` |
+| `X11/Intrinsic.h` | `libxt-dev` |
+| `alsa/asoundlib.h` | `libasound2-dev` |
 
 For `output_mode = paste` on Wayland, install `wtype`. On X11, `xdotool` is the fallback.
 
