@@ -17,6 +17,9 @@ import (
 	"strings"
 	"sync"
 	"time"
+	"unicode/utf8"
+
+	"golang.org/x/sys/unix"
 )
 
 // ColorMode controls whether ANSI escape codes are emitted by a Reporter.
@@ -65,6 +68,7 @@ type Reporter struct {
 	mode  ColorMode
 	color bool // resolved emit decision; computed once at construction
 	tty   bool // resolved TTY decision; computed once at construction
+	ttyFd int  // file descriptor for terminal size queries; -1 if not a TTY
 }
 
 // NewReporter constructs a Reporter writing to w with the given color mode.
@@ -81,11 +85,18 @@ func NewReporter(w io.Writer, mode ColorMode) *Reporter {
 	tty := isTerminal(w)
 	emit := mode == ColorAlways ||
 		(mode == ColorAuto && tty && os.Getenv("NO_COLOR") == "")
+	fd := -1
+	if tty {
+		if f, ok := w.(*os.File); ok {
+			fd = int(f.Fd())
+		}
+	}
 	return &Reporter{
 		w:     w,
 		mode:  mode,
 		color: emit,
 		tty:   tty,
+		ttyFd: fd,
 	}
 }
 
@@ -103,6 +114,63 @@ func isTerminal(w io.Writer) bool {
 		return false
 	}
 	return fi.Mode()&os.ModeCharDevice != 0
+}
+
+// termWidth returns the current terminal width in columns. Returns 0 if
+// the width cannot be determined (not a TTY, or ioctl fails).
+func (r *Reporter) termWidth() int {
+	if r.ttyFd < 0 {
+		return 0
+	}
+	ws, err := unix.IoctlGetWinsize(r.ttyFd, unix.TIOCGWINSZ)
+	if err != nil {
+		return 0
+	}
+	return int(ws.Col)
+}
+
+// truncateLine trims s to at most width visible runes (excluding ANSI escape
+// sequences). This prevents the recording line from wrapping on narrow
+// terminals, which would leave ghost text that the \r redraw can't clear.
+// If width <= 0 the original string is returned unchanged.
+func truncateLine(s string, width int) string {
+	if width <= 0 {
+		return s
+	}
+	// Walk the string counting visible runes (skipping ANSI CSI sequences).
+	visible := 0
+	i := 0
+	runes := []rune(s)
+	var out strings.Builder
+	for i < len(runes) {
+		// Detect ESC [ ... final-byte (CSI sequence) and copy verbatim.
+		if runes[i] == '\x1b' && i+1 < len(runes) && runes[i+1] == '[' {
+			j := i + 2
+			for j < len(runes) && (runes[j] < 0x40 || runes[j] > 0x7e) {
+				j++
+			}
+			if j < len(runes) {
+				j++ // include final byte
+			}
+			for _, r := range runes[i:j] {
+				out.WriteRune(r)
+			}
+			i = j
+			continue
+		}
+		if visible >= width {
+			break
+		}
+		out.WriteRune(runes[i])
+		// Count the visual width of the rune (block glyphs are double-wide).
+		if utf8.RuneLen(runes[i]) > 1 {
+			visible += 2 // treat non-ASCII rune as 2 columns (covers block glyphs)
+		} else {
+			visible++
+		}
+		i++
+	}
+	return out.String()
 }
 
 // colorize wraps s in the given ANSI color if color emission is enabled.
@@ -204,7 +272,9 @@ func (r *Reporter) drawRecordingFrame(levelFn func() []float64, hint string) {
 	// The em dash here is intentional — matches the static non-TTY
 	// "Recording — <hint>" form so users get a consistent look across
 	// modes.
-	fmt.Fprintf(r.w, "%s%s Recording — %s  %s", ansiClearLine, dot, hintStyled, bar)
+	line := fmt.Sprintf("%s Recording — %s  %s", dot, hintStyled, bar)
+	line = truncateLine(line, r.termWidth())
+	fmt.Fprintf(r.w, "%s%s", ansiClearLine, line)
 }
 
 // meterBar renders a 7-glyph audio level meter from levels. Missing slots
