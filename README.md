@@ -190,7 +190,20 @@ Header-to-package cheat sheet if a build still fails on a missing include:
 | `X11/Intrinsic.h` | `libxt-dev` |
 | `alsa/asoundlib.h` | `libasound2-dev` |
 
-For `output_mode = paste` on Wayland, install `wtype`. On X11, `xdotool` is the fallback.
+For `output_mode = paste`, flowstate tries autotype tools in order until one works:
+
+- **Wayland**: `wtype` → `ydotool` → `xdotool` (XWayland fallback).
+- **X11**: `xdotool` → `ydotool` → `wtype`.
+
+`wtype` is the lightest option but only works on compositors that implement `wlr-virtual-keyboard-unstable-v1` — i.e. wlroots-based ones (Sway, Hyprland, river). On GNOME or KDE Plasma it exits with `Compositor does not support the virtual keyboard protocol`; flowstate detects that and automatically falls through to the next tool. Install `ydotool` for those:
+
+```sh
+sudo apt install ydotool        # binary + daemon
+sudo systemctl enable --now ydotoold
+sudo usermod -aG input "$USER"  # log out + back in for group to apply
+```
+
+If you'd rather not deal with autotype at all, use `output_mode = "stdout,clipboard"` and press Ctrl+V yourself.
 
 </details>
 
