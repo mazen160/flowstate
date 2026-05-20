@@ -164,7 +164,9 @@ For the web UI, the browser will ask for microphone permission the first time yo
 <details>
 <summary><b>Linux</b></summary>
 
-On Debian/Ubuntu-based distributions, install a C toolchain plus the X11, xkbcommon, and ALSA headers that `gohook` and `malgo` link against. Missing any one of these surfaces as a `fatal error: <header>.h: No such file or directory` during `go build`.
+### Build deps (Debian / Ubuntu)
+
+Install a C toolchain plus the X11, xkbcommon, and ALSA headers that `gohook` and `malgo` link against. Missing any one of these surfaces as a `fatal error: <header>.h: No such file or directory` during `go build`.
 
 ```sh
 sudo apt-get update
@@ -190,20 +192,27 @@ Header-to-package cheat sheet if a build still fails on a missing include:
 | `X11/Intrinsic.h` | `libxt-dev` |
 | `alsa/asoundlib.h` | `libasound2-dev` |
 
-For `output_mode = paste`, flowstate tries autotype tools in order until one works:
+### Runtime: paste autotype (optional)
 
-- **Wayland**: `wtype` → `ydotool` → `xdotool` (XWayland fallback).
-- **X11**: `xdotool` → `ydotool` → `wtype`.
+`output_mode = paste` shells out to a small helper to synthesize Ctrl+V. Which helper to install depends on your session — check with `echo $XDG_SESSION_TYPE`:
 
-`wtype` is the lightest option but only works on compositors that implement `wlr-virtual-keyboard-unstable-v1` — i.e. wlroots-based ones (Sway, Hyprland, river). On GNOME or KDE Plasma it exits with `Compositor does not support the virtual keyboard protocol`; flowstate detects that and automatically falls through to the next tool. Install `ydotool` for those:
+| Session | Compositor / WM | Install | Notes |
+|---|---|---|---|
+| Wayland | Sway, Hyprland, river (wlroots) | `sudo apt install wtype` | Lightest. No daemon. |
+| Wayland | GNOME, KDE Plasma | `sudo apt install ydotool` | `wtype` doesn't work here — those compositors don't implement `wlr-virtual-keyboard-unstable-v1`. ydotool needs the setup block below. |
+| X11 | any | `sudo apt install xdotool` | Zero setup. |
+
+flowstate tries them in order (Wayland: `wtype` → `ydotool` → `xdotool`; X11: `xdotool` → `ydotool` → `wtype`) and automatically falls through when a tool is installed but the environment rejects it, so installing more than one is safe.
+
+**ydotool one-time setup** (only needed if you went that route):
 
 ```sh
-sudo apt install ydotool        # binary + daemon
-sudo systemctl enable --now ydotoold
-sudo usermod -aG input "$USER"  # log out + back in for group to apply
+sudo apt install ydotool                 # ships both ydotool and ydotoold
+sudo systemctl enable --now ydotoold     # the daemon backs the /dev/uinput access
+sudo usermod -aG input "$USER"           # log out + back in for the group to apply
 ```
 
-If you'd rather not deal with autotype at all, use `output_mode = "stdout,clipboard"` and press Ctrl+V yourself.
+If you'd rather skip autotype entirely, use `output_mode = "stdout,clipboard"` and press Ctrl+V yourself.
 
 </details>
 
