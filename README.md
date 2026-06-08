@@ -286,12 +286,14 @@ That's the whole loop. The cleaned text lands wherever you've configured (stdout
 Run `flowstate web` and open `http://127.0.0.1:8585`. Here's what you get:
 
 - **Tap to toggle, or hold to talk.** A short tap (or `Space` / `Enter`) starts recording, another short tap stops. Press-and-hold (mouse, touch, *or* the Space key) for at least 320 ms to switch into release-to-send mode for that one recording.
+- **Two local pages.** Use **Transcribe** for the Groq-backed dictation flow, or **Mic Record** to save browser-local mic clips that you can replay later without sending them to the server.
+- **Mic picker.** Choose any connected browser microphone from the recorder row, refresh the list after plugging in a new input, then use Mic Record to capture and replay test clips.
 - **Live waveform meter.** While you speak, the brand mark on the record button is replaced by 7 gradient bars driven by your real audio levels, same vocabulary as the CLI's mic meter.
-- **Latest result + history.** Every recording shows up as a card with Copy and Show-raw buttons. Older transcripts stack into a per-session history list with their own Copy buttons.
+- **Latest result + history.** Transcriptions show up as cleaned text with Copy and Show-raw buttons. Mic recordings use the same Latest/History layout with an audio player for replay.
 - **Toasts for everything.** Copies (manual *and* auto), settings saves, session switches, and local-data clears all pop a small bottom-right confirmation so you never wonder if a click landed.
-- **Sessions.** Hit *New session* in the top bar to start a fresh stream of transcripts. The session select in Settings switches between past sessions; *Export JSON* / *Export Markdown* dump the current one to a file.
+- **Sessions.** Hit *New session* in the top bar to start a fresh stream. The session select in Settings switches between past sessions; *Export JSON* / *Export Markdown* dump the current page's session items to a file.
 - **Auto-copy** *(opt-in)*. Toggle in Settings to copy each cleaned transcript to the clipboard automatically the moment it finishes.
-- **Privacy by design.** Sessions, transcripts, and the optional API token live in your browser's `localStorage`, the server never persists them. The audio bytes are streamed straight to Groq and never written to disk on the server side. *Clear local data* in Settings wipes everything in this browser.
+- **Privacy by design.** Sessions, transcripts, Mic Record clips, and the optional API token live in your browser's `localStorage`, the server never persists them. Transcription audio bytes are streamed straight to Groq and never written to disk on the server side. *Clear local data* in Settings wipes everything in this browser.
 
 Common knobs:
 
@@ -438,7 +440,7 @@ flowstate devices            # list inputs
 flowstate --device '4275696c74496e4d6963726f70686f6e65446576696365'
 ```
 
-In the web UI, the microphone is whichever your browser's standard "this site wants to use your microphone" picker selected, change it from the browser's site-permissions UI.
+In the web UI, use the **Mic** picker below the record button. It lists browser-visible microphones, persists the selected input for that URL, and falls back to the default microphone if the saved input is disconnected.
 
 ### Dictate from another machine on your LAN (Web UI)
 
@@ -679,7 +681,7 @@ The web UI replaces these with on-page state (waveform meter, ring pulse, status
 
 **The page loads but `Record` does nothing.** Open your browser's devtools console, most likely the mic permission was denied or the request to `/api/transcribe` returned `401` (token missing/wrong). The web UI surfaces the failure as a toast; the console has the underlying HTTP error.
 
-**Settings changes don't seem to stick.** All web settings (token, session, auto-copy) live in the browser's `localStorage` for the URL you're on. Clearing your browser's site data, or using a different browser/profile, starts fresh. Use *Clear local data* in the Settings sheet to wipe deliberately.
+**Settings changes don't seem to stick.** All web settings (token, session, selected mic, auto-copy) live in the browser's `localStorage` for the URL you're on. Clearing your browser's site data, or using a different browser/profile, starts fresh. Use *Clear local data* in the Settings sheet to wipe deliberately.
 
 </details>
 

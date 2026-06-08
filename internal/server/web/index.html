@@ -69,6 +69,14 @@
         <span class="brand-tag">Stay in flow.</span>
       </span>
     </a>
+    <nav class="view-switch" aria-label="Pages">
+      <button id="view-transcribe" class="view-tab" type="button" data-view="transcribe" aria-pressed="true">
+        Transcribe
+      </button>
+      <button id="view-mic" class="view-tab" type="button" data-view="mic" aria-pressed="false">
+        Mic Record
+      </button>
+    </nav>
     <div class="session-bar">
       <span id="session-label" class="session-label">Session</span>
       <button id="new-session" class="btn btn-ghost" type="button">
@@ -83,7 +91,7 @@
     <div class="auth-copy">
       <span class="section-label">Authentication</span>
       <h2 id="auth-title">Token required</h2>
-      <p>This server was started with a web token. Save it once for this browser to enable recording.</p>
+      <p>This server was started with a web token. Save it once for this browser to enable transcription.</p>
     </div>
     <form id="auth-form" class="auth-form">
       <label class="field auth-token-field">
@@ -135,6 +143,14 @@
     <p id="rec-hint" class="rec-hint">
       Tap to toggle, or hold to talk &mdash; <kbd>Space</kbd> and <kbd>Enter</kbd> work too.
     </p>
+    <div class="mic-picker" aria-label="Microphone input">
+      <label class="field mic-field" for="mic-select">
+        <span class="field-label">Mic</span>
+        <select id="mic-select"></select>
+      </label>
+      <button id="mic-refresh" class="mic-refresh" type="button"
+              aria-label="Refresh microphones" title="Refresh microphones">↻</button>
+    </div>
     <p id="rec-status" class="rec-status" role="status" aria-live="polite"></p>
   </section>
 
@@ -151,7 +167,7 @@
         </button>
       </div>
     </div>
-    <p id="result-cleaned" class="result-text"></p>
+    <div id="result-body" class="result-body"></div>
     <p id="result-raw" class="result-raw" hidden></p>
   </section>
 
@@ -198,19 +214,19 @@
         <select id="session-select"></select>
       </label>
     </div>
-    <label class="toggle-row" for="auto-copy">
+    <label id="auto-copy-row" class="toggle-row" for="auto-copy">
       <input id="auto-copy" type="checkbox">
       <span class="toggle-text">
         <span class="toggle-title">Auto-copy after transcription</span>
-        <span class="toggle-desc">Put the cleaned text on the clipboard automatically when each recording finishes.</span>
+        <span class="toggle-desc">Put the cleaned text on the clipboard automatically when each transcription finishes.</span>
       </span>
     </label>
     <div class="settings-danger">
       <div class="settings-danger-text">
         <span class="field-label">Local data</span>
         <p class="settings-danger-desc">
-          All sessions, transcripts, and the saved API token live in this browser's
-          localStorage. Clearing wipes everything; the server is untouched.
+          Sessions, transcripts, mic recordings, and the saved API token live in
+          this browser's localStorage. Clearing wipes everything; the server is untouched.
         </p>
       </div>
       <button id="clear-storage" class="btn btn-danger" type="button">Clear local data</button>

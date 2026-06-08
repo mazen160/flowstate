@@ -1,10 +1,12 @@
 /* flowstate web — vanilla JS frontend.
  *
  * No build step, no framework, no CDN. All state lives in localStorage so
- * the server never persists transcripts:
+ * the server never persists transcripts or Mic Record clips:
  *
  *   flowstate.sessions          [{id, startedAt, items: [...]}, ...]
  *   flowstate.currentSessionId  string
+ *   flowstate.view              "transcribe" | "mic"
+ *   flowstate.micDeviceId       optional selected audioinput deviceId
  *   flowstate.token             optional Bearer token for /api/* calls
  */
 
@@ -16,6 +18,8 @@
   var S = {
     sessions: [],
     currentSessionId: null,
+    view: 'transcribe',
+    micDeviceId: '',
     token: '',
     autoCopy: false,
     authRequired: false,
@@ -26,6 +30,11 @@
     saving: false,
     statusMessage: '',
     statusVariant: ''
+  };
+
+  var MIC = {
+    loading: false,
+    labelsAvailable: false
   };
 
   var REC = {
@@ -44,6 +53,8 @@
     sourceNode: null,
     rafId: 0,
     timeData: null,
+    mode: 'transcribe',
+    recordingStartedAt: 0,
     // Press timestamp captured on press; consulted on release to decide
     // whether the gesture was a tap (toggle) or a hold (stop now).
     pressStartTs: 0
@@ -57,12 +68,49 @@
   var SESSION_REUSE_MS = 30 * 60 * 1000;
   var DEFAULT_REC_HINT = '';
 
+  var VIEWS = {
+    transcribe: {
+      label: 'Transcribe',
+      hash: '',
+      itemType: 'transcript',
+      itemNoun: 'transcript',
+      itemNounPlural: 'transcripts',
+      heading: 'Record',
+      recAria: 'Record and transcribe',
+      hintHTML: 'Tap to toggle, or hold to talk &mdash; <kbd>Space</kbd> and <kbd>Enter</kbd> work too.',
+      emptyHTML: 'Press the button &mdash; or hold <kbd>Space</kbd> &mdash; to dictate your first transcript.',
+      busyLabel: '● Uploading…'
+    },
+    mic: {
+      label: 'Mic Record',
+      hash: 'mic-record',
+      itemType: 'clip',
+      itemNoun: 'recording',
+      itemNounPlural: 'recordings',
+      heading: 'Mic Record',
+      recAria: 'Record mic clip',
+      hintHTML: 'Tap to toggle, or hold to record &mdash; <kbd>Space</kbd> and <kbd>Enter</kbd> work too.',
+      emptyHTML: 'Press the button &mdash; or hold <kbd>Space</kbd> &mdash; to save your first mic recording.',
+      busyLabel: '● Saving…'
+    }
+  };
+
+  function cleanViewName(value) {
+    return value === 'mic' ? 'mic' : 'transcribe';
+  }
+
+  function viewFromHash() {
+    return window.location.hash === '#mic-record' ? 'mic' : null;
+  }
+
   function loadState() {
     try {
       var raw = localStorage.getItem('flowstate.sessions');
       S.sessions = raw ? JSON.parse(raw) : [];
     } catch (e) { S.sessions = []; }
     S.currentSessionId = localStorage.getItem('flowstate.currentSessionId') || null;
+    S.view = cleanViewName(viewFromHash() || localStorage.getItem('flowstate.view') || 'transcribe');
+    S.micDeviceId = localStorage.getItem('flowstate.micDeviceId') || '';
     S.token = localStorage.getItem('flowstate.token') || '';
     // Auto-copy preference. Default off so the first run doesn't surprise
     // the user by stomping their clipboard. Stored as the literal string
@@ -78,13 +126,32 @@
       if (S.currentSessionId) {
         localStorage.setItem('flowstate.currentSessionId', S.currentSessionId);
       }
+      localStorage.setItem('flowstate.view', S.view);
+      if (S.micDeviceId) {
+        localStorage.setItem('flowstate.micDeviceId', S.micDeviceId);
+      } else {
+        localStorage.removeItem('flowstate.micDeviceId');
+      }
       if (S.token) {
         localStorage.setItem('flowstate.token', S.token);
       } else {
         localStorage.removeItem('flowstate.token');
       }
       localStorage.setItem('flowstate.autoCopy', S.autoCopy ? '1' : '0');
-    } catch (e) { /* quota or private-mode — best effort */ }
+      return true;
+    } catch (e) {
+      return false;
+    }
+  }
+
+  function persistMicDevice() {
+    try {
+      if (S.micDeviceId) {
+        localStorage.setItem('flowstate.micDeviceId', S.micDeviceId);
+      } else {
+        localStorage.removeItem('flowstate.micDeviceId');
+      }
+    } catch (e) { /* best effort */ }
   }
 
   function currentSession() {
@@ -134,6 +201,281 @@
 
   var $ = function (id) { return document.getElementById(id); };
 
+  function currentView() {
+    return VIEWS[S.view] || VIEWS.transcribe;
+  }
+
+  function itemType(item) {
+    return item && item.type ? item.type : 'transcript';
+  }
+
+  function viewItemsFor(session) {
+    if (!session || !Array.isArray(session.items)) return [];
+    var want = currentView().itemType;
+    var out = [];
+    for (var i = 0; i < session.items.length; i++) {
+      if (itemType(session.items[i]) === want) out.push(session.items[i]);
+    }
+    return out;
+  }
+
+  function formatCount(n, cfg) {
+    return n + ' ' + (n === 1 ? cfg.itemNoun : cfg.itemNounPlural);
+  }
+
+  function formatDuration(ms) {
+    if (!ms || ms < 0) return '0s';
+    if (ms < 1000) return '<1s';
+    var seconds = Math.round(ms / 1000);
+    var mins = Math.floor(seconds / 60);
+    var rem = seconds % 60;
+    if (mins <= 0) return seconds + 's';
+    return mins + ':' + String(rem).padStart(2, '0');
+  }
+
+  function formatBytes(bytes) {
+    bytes = bytes || 0;
+    if (bytes < 1024) return bytes + ' B';
+    if (bytes < 1024 * 1024) return Math.round(bytes / 1024) + ' KB';
+    return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
+  }
+
+  function setStatus(text) {
+    var el = $('rec-status');
+    if (el) el.textContent = text || '';
+  }
+
+  function setView(next, opts) {
+    next = cleanViewName(next);
+    opts = opts || {};
+    if (next === S.view && !opts.force) return;
+    if (REC.state !== 'idle' && !opts.force) {
+      showToast('Recording in progress', {
+        desc: 'Stop the current recording before switching pages.',
+        variant: 'warn',
+        icon: '!'
+      });
+      return;
+    }
+    S.view = next;
+    try { localStorage.setItem('flowstate.view', S.view); } catch (e) { /* best effort */ }
+    if (opts.updateHash !== false) {
+      var hash = currentView().hash;
+      if (hash && window.location.hash !== '#' + hash) {
+        window.location.hash = hash;
+      } else if (!hash && window.location.hash) {
+        history.replaceState(null, '', window.location.pathname + window.location.search);
+      }
+    }
+    refreshViewUI();
+    refreshAuthUI();
+    rerender();
+    if (isAuthBlocked()) openAuthPanel(true);
+  }
+
+  function refreshViewUI() {
+    var cfg = currentView();
+    document.body.setAttribute('data-view', S.view);
+
+    var transcribeBtn = $('view-transcribe');
+    var micBtn = $('view-mic');
+    if (transcribeBtn) transcribeBtn.setAttribute('aria-pressed', S.view === 'transcribe' ? 'true' : 'false');
+    if (micBtn) micBtn.setAttribute('aria-pressed', S.view === 'mic' ? 'true' : 'false');
+
+    var heading = $('rec-heading');
+    if (heading) heading.textContent = cfg.heading;
+    var rec = $('rec');
+    if (rec) rec.setAttribute('aria-label', cfg.recAria);
+    var hint = $('rec-hint');
+    if (hint && !isAuthBlocked()) hint.innerHTML = cfg.hintHTML;
+    var empty = $('history-empty');
+    if (empty) empty.innerHTML = cfg.emptyHTML;
+
+    var autoCopyRow = $('auto-copy-row');
+    if (autoCopyRow) autoCopyRow.hidden = S.view !== 'transcribe';
+  }
+
+  // ---- Microphone picker --------------------------------------------
+
+  function micDevicesSupported() {
+    return !!(navigator.mediaDevices &&
+      typeof navigator.mediaDevices.getUserMedia === 'function' &&
+      typeof navigator.mediaDevices.enumerateDevices === 'function');
+  }
+
+  function setMicControlsDisabled(disabled) {
+    var select = $('mic-select');
+    var refresh = $('mic-refresh');
+    var unavailable = !micDevicesSupported();
+    var locked = !!disabled || REC.state !== 'idle' || MIC.loading || unavailable;
+    if (select) select.disabled = locked;
+    if (refresh) refresh.disabled = locked;
+  }
+
+  function makeMicOption(value, label, disabled) {
+    var opt = document.createElement('option');
+    opt.value = value || '';
+    opt.textContent = label;
+    if (disabled) opt.disabled = true;
+    return opt;
+  }
+
+  function selectedMicLabel() {
+    var select = $('mic-select');
+    if (select && select.selectedIndex >= 0 && select.options[select.selectedIndex]) {
+      return select.options[select.selectedIndex].textContent;
+    }
+    return S.micDeviceId ? 'Selected microphone' : 'Default microphone';
+  }
+
+  function renderMicOptions(devices, opts) {
+    opts = opts || {};
+    var select = $('mic-select');
+    if (!select) return 0;
+
+    select.innerHTML = '';
+    if (!micDevicesSupported()) {
+      select.appendChild(makeMicOption('', 'Microphone list unavailable', true));
+      setMicControlsDisabled(true);
+      return 0;
+    }
+
+    var audioInputs = [];
+    for (var i = 0; i < devices.length; i++) {
+      if (devices[i].kind === 'audioinput') audioInputs.push(devices[i]);
+    }
+    if (audioInputs.some(function (d) { return !!d.label; })) MIC.labelsAvailable = true;
+
+    select.appendChild(makeMicOption('', 'Default microphone', false));
+
+    var foundSelected = !S.micDeviceId;
+    var visibleCount = 0;
+    for (var j = 0; j < audioInputs.length; j++) {
+      var device = audioInputs[j];
+      if (!device.deviceId || device.deviceId === 'default') continue;
+      visibleCount++;
+      var label = device.label || ('Microphone ' + visibleCount);
+      select.appendChild(makeMicOption(device.deviceId, label, false));
+      if (device.deviceId === S.micDeviceId) foundSelected = true;
+    }
+
+    if (S.micDeviceId && !foundSelected) {
+      if (opts.validateSelection && MIC.labelsAvailable) {
+        var oldLabel = 'Selected microphone';
+        S.micDeviceId = '';
+        persistMicDevice();
+        if (!opts.quiet) {
+          showToast('Microphone unavailable', {
+            desc: oldLabel + ' is no longer connected. Using the default microphone.',
+            variant: 'warn',
+            icon: '!'
+          });
+        }
+      } else {
+        select.appendChild(makeMicOption(S.micDeviceId, 'Selected microphone', false));
+      }
+    }
+
+    select.value = S.micDeviceId || '';
+    setMicControlsDisabled(false);
+    return visibleCount;
+  }
+
+  async function refreshMicrophones(opts) {
+    opts = opts || {};
+    var select = $('mic-select');
+    if (!select) return;
+    if (!micDevicesSupported()) {
+      renderMicOptions([], opts);
+      return;
+    }
+    MIC.loading = true;
+    setMicControlsDisabled(true);
+    try {
+      var devices = await navigator.mediaDevices.enumerateDevices();
+      var count = renderMicOptions(devices, opts);
+      if (opts.notify) {
+        showToast('Microphones refreshed', {
+          desc: count ? (count + (count === 1 ? ' input found.' : ' inputs found.')) : 'Using the browser default microphone.',
+          variant: 'info',
+          icon: '↻'
+        });
+      }
+    } catch (e) {
+      select.innerHTML = '';
+      select.appendChild(makeMicOption('', 'Microphones unavailable', true));
+      if (!opts.quiet) {
+        showToast('Could not list microphones', {
+          desc: e && e.message ? e.message : 'The browser did not allow device listing.',
+          variant: 'warn',
+          icon: '!'
+        });
+      }
+    } finally {
+      MIC.loading = false;
+      setMicControlsDisabled(false);
+    }
+  }
+
+  function audioConstraintsForSelection() {
+    if (!S.micDeviceId) return true;
+    return { deviceId: { exact: S.micDeviceId } };
+  }
+
+  function selectedMicMissing(err) {
+    if (!S.micDeviceId || !err) return false;
+    return err.name === 'NotFoundError' ||
+      err.name === 'OverconstrainedError' ||
+      err.name === 'ConstraintNotSatisfiedError';
+  }
+
+  async function getSelectedMicStream() {
+    if (!navigator.mediaDevices || typeof navigator.mediaDevices.getUserMedia !== 'function') {
+      throw new TypeError('getUserMedia is unavailable');
+    }
+    try {
+      return await navigator.mediaDevices.getUserMedia({ audio: audioConstraintsForSelection() });
+    } catch (err) {
+      if (!selectedMicMissing(err)) throw err;
+      var oldLabel = selectedMicLabel();
+      S.micDeviceId = '';
+      persistMicDevice();
+      await refreshMicrophones({ quiet: true, validateSelection: true });
+      showToast('Microphone unavailable', {
+        desc: oldLabel + ' is no longer connected. Using the default microphone.',
+        variant: 'warn',
+        icon: '!'
+      });
+      return await navigator.mediaDevices.getUserMedia({ audio: true });
+    }
+  }
+
+  function bindMicPicker() {
+    var select = $('mic-select');
+    var refresh = $('mic-refresh');
+    if (!select) return;
+    select.addEventListener('change', function () {
+      S.micDeviceId = this.value || '';
+      persistMicDevice();
+      showToast('Microphone selected', {
+        desc: selectedMicLabel(),
+        variant: 'info',
+        icon: '✓'
+      });
+    });
+    if (refresh) {
+      refresh.addEventListener('click', function () {
+        refreshMicrophones({ notify: true, validateSelection: true });
+      });
+    }
+    if (navigator.mediaDevices && typeof navigator.mediaDevices.addEventListener === 'function') {
+      navigator.mediaDevices.addEventListener('devicechange', function () {
+        refreshMicrophones({ quiet: true, validateSelection: true });
+      });
+    }
+    refreshMicrophones({ quiet: true });
+  }
+
   // ---- Auth token UX -------------------------------------------------
 
   function tokenInputs() {
@@ -176,7 +518,10 @@
       return { message: 'Token has unsaved changes.', variant: 'info' };
     }
     if (S.authRequired && !S.token) {
-      return { message: 'Enter the web token to enable recording.', variant: 'warn' };
+      if (S.view === 'mic') {
+        return { message: 'Token required for transcription. Mic Record works locally.', variant: 'warn' };
+      }
+      return { message: 'Enter the web token to enable transcription.', variant: 'warn' };
     }
     if (S.authRequired && S.token) {
       return { message: 'Token saved in this browser.', variant: 'success' };
@@ -185,7 +530,7 @@
   }
 
   function isAuthBlocked() {
-    return S.authRequired && !S.token;
+    return S.view === 'transcribe' && S.authRequired && !S.token;
   }
 
   function openAuthPanel(focusInput) {
@@ -214,8 +559,9 @@
 
     var hint = $('rec-hint');
     if (hint) {
-      if (!DEFAULT_REC_HINT) DEFAULT_REC_HINT = hint.textContent;
-      hint.textContent = blocked ? 'Save the server token to enable recording.' : DEFAULT_REC_HINT;
+      if (!DEFAULT_REC_HINT) DEFAULT_REC_HINT = hint.innerHTML;
+      if (blocked) hint.textContent = 'Save the server token to enable transcription.';
+      else hint.innerHTML = currentView().hintHTML;
     }
 
     var draft = (getTokenDraft() || '').trim();
@@ -286,12 +632,12 @@
       input.value = '';
       setTokenDraft('', input);
       setAuthStatus(
-        S.authRequired ? 'Token cleared. Enter a token to enable recording.' : 'Token cleared.',
+        S.authRequired ? 'Token cleared. Enter a token to enable transcription.' : 'Token cleared.',
         S.authRequired ? 'warn' : 'info'
       );
-      if (S.authRequired) openAuthPanel(true);
+      if (isAuthBlocked()) openAuthPanel(true);
       showToast('API token cleared', {
-        desc: S.authRequired ? 'Recording is locked until a valid token is saved.' : 'No token is stored locally.',
+        desc: S.authRequired ? 'Transcription is locked until a valid token is saved.' : 'No token is stored locally.',
         variant: 'info',
         icon: '✓'
       });
@@ -306,7 +652,7 @@
       var ok = await validateToken(token);
       if (!ok) {
         setAuthStatus('Token was not accepted. Check it and try again.', 'error');
-        if (!S.token) openAuthPanel(true);
+        if (!S.token && isAuthBlocked()) openAuthPanel(true);
         showToast('Token not accepted', {
           desc: 'The server rejected that web token.',
           variant: 'warn',
@@ -318,7 +664,7 @@
       persist();
       input.value = S.token;
       setTokenDraft(S.token, input);
-      setAuthStatus('Token saved. Recording is enabled.', 'success');
+      setAuthStatus('Token saved. Transcription is enabled.', 'success');
       showToast('API token saved', {
         desc: 'This browser will use it for authenticated requests.',
         variant: 'success',
@@ -344,7 +690,7 @@
       var ok = await validateToken(S.token);
       if (ok) {
         S.authChecked = true;
-        setAuthStatus('Token saved. Recording is enabled.', 'success');
+        setAuthStatus('Token saved. Transcription is enabled.', 'success');
         return;
       }
       var rejected = S.token;
@@ -353,7 +699,7 @@
       setTokenDraft(rejected);
       S.authChecked = true;
       setAuthStatus('Saved token was rejected. Paste the current server token.', 'error');
-      openAuthPanel(true);
+      if (isAuthBlocked()) openAuthPanel(true);
       showToast('Token needs attention', {
         desc: 'The saved token no longer unlocks this server.',
         variant: 'warn',
@@ -361,7 +707,7 @@
       });
     } catch (e) {
       S.authChecked = true;
-      setAuthStatus('Could not verify the saved token. Recording may fail until the server responds.', 'warn');
+      setAuthStatus('Could not verify the saved token. Transcription may fail until the server responds.', 'warn');
     }
   }
 
@@ -459,8 +805,9 @@
     btn.setAttribute('aria-pressed', name === 'recording' ? 'true' : 'false');
     var label = '';
     if (name === 'recording') label = '● Recording…';
-    if (name === 'uploading') label = '● Uploading…';
-    $('rec-status').textContent = label;
+    if (name === 'uploading') label = (VIEWS[REC.mode] || currentView()).busyLabel;
+    setStatus(label);
+    setMicControlsDisabled(name !== 'idle');
     // Snap the meter bars to a state-appropriate resting pose so the
     // visual matches what the CSS expects. This is purely cosmetic;
     // AnalyserNode teardown happens in stopMeter() once mediaRecorder.onstop
@@ -486,13 +833,15 @@
   function renderSessionSelect() {
     var sel = $('session-select');
     sel.innerHTML = '';
+    var cfg = currentView();
     for (var i = 0; i < S.sessions.length; i++) {
       var s = S.sessions[i];
       var opt = document.createElement('option');
       opt.value = s.id;
       var when = new Date(s.startedAt);
+      var count = viewItemsFor(s).length;
       opt.textContent = '#' + s.id.slice(0, 6) + ' — ' + when.toLocaleString() +
-                        ' (' + s.items.length + ')';
+                        ' (' + count + ' ' + (count === 1 ? cfg.itemNoun : cfg.itemNounPlural) + ')';
       if (s.id === S.currentSessionId) opt.selected = true;
       sel.appendChild(opt);
     }
@@ -644,12 +993,65 @@
     return btn;
   }
 
+  function makeTranscriptText(item, className) {
+    var p = document.createElement('p');
+    p.className = className || 'history-cleaned';
+    p.textContent = item.cleaned || '(empty cleaned output)';
+    return p;
+  }
+
+  function makeClipCard(item, compact) {
+    var wrap = document.createElement('div');
+    wrap.className = compact ? 'history-clip' : 'clip-card';
+
+    var title = document.createElement('p');
+    title.className = 'clip-title';
+    title.textContent = item.title || 'Mic recording';
+    wrap.appendChild(title);
+
+    var meta = document.createElement('div');
+    meta.className = 'clip-meta';
+    var parts = [
+      formatDuration(item.durationMs || 0),
+      formatBytes(item.size || 0)
+    ];
+    if (item.micLabel) parts.push(item.micLabel);
+    if (item.mime) parts.push(item.mime);
+    for (var i = 0; i < parts.length; i++) {
+      var span = document.createElement('span');
+      span.textContent = parts[i];
+      meta.appendChild(span);
+    }
+    wrap.appendChild(meta);
+
+    if (item.dataURL) {
+      var audio = document.createElement('audio');
+      audio.className = 'clip-player';
+      audio.controls = true;
+      audio.preload = 'metadata';
+      audio.src = item.dataURL;
+      wrap.appendChild(audio);
+    } else {
+      var note = document.createElement('p');
+      note.className = 'clip-note';
+      note.textContent = 'Audio data is not available for this recording.';
+      wrap.appendChild(note);
+    }
+    return wrap;
+  }
+
   function renderHistory() {
     var s = currentSession();
     var list = $('history-list');
     list.innerHTML = '';
-    var items = s ? s.items.slice().reverse() : [];
+    var cfg = currentView();
+    var items = viewItemsFor(s).slice().reverse();
     var countEl = $('history-count');
+    var resultBody = $('result-body');
+    if (resultBody) {
+      resultBody.innerHTML = '';
+      resultBody.dataset.copyText = '';
+    }
     if (items.length === 0) {
       $('history-empty').hidden = false;
       $('result').hidden = true;
@@ -657,9 +1059,10 @@
       return;
     }
     $('history-empty').hidden = true;
-    if (countEl) countEl.textContent = items.length + (items.length === 1 ? ' transcript' : ' transcripts');
+    if (countEl) countEl.textContent = formatCount(items.length, cfg);
     for (var i = 0; i < items.length; i++) {
       var it = items[i];
+      var type = itemType(it);
       var li = document.createElement('li');
       li.className = 'history-item';
 
@@ -668,19 +1071,22 @@
       var ts = document.createElement('span');
       ts.textContent = fmtHistoryTime(new Date(it.ts));
       meta.appendChild(ts);
-      // Per-item copy button. Closure captures `it` so each row copies
-      // its own cleaned text, not whichever row was added last.
-      (function (item) {
-        meta.appendChild(makeCopyButton(function () { return item.cleaned || ''; }));
-      })(it);
+      if (type === 'transcript') {
+        // Per-item copy button. Closure captures `it` so each row copies
+        // its own cleaned text, not whichever row was added last.
+        (function (item) {
+          meta.appendChild(makeCopyButton(function () { return item.cleaned || ''; }));
+        })(it);
+      }
       li.appendChild(meta);
 
-      var p = document.createElement('p');
-      p.className = 'history-cleaned';
-      p.textContent = it.cleaned || '(empty cleaned output)';
-      li.appendChild(p);
+      if (type === 'clip') {
+        li.appendChild(makeClipCard(it, true));
+      } else {
+        li.appendChild(makeTranscriptText(it, 'history-cleaned'));
+      }
 
-      if (it.raw && it.raw !== it.cleaned) {
+      if (type === 'transcript' && it.raw && it.raw !== it.cleaned) {
         var toggle = document.createElement('button');
         toggle.type = 'button';
         toggle.className = 'raw-toggle';
@@ -697,20 +1103,33 @@
     }
     // Latest card
     var latest = items[0];
-    $('result-cleaned').textContent = latest.cleaned || '(no cleaned output)';
     var rawEl = $('result-raw');
     var rawToggle = $('result-raw-toggle');
-    if (latest.raw && latest.raw !== latest.cleaned) {
-      rawEl.textContent = latest.raw;
-      rawToggle.hidden = false;
-      // Reset to collapsed on each render so the panel doesn't surprise
-      // the user with an open raw block on a new transcription.
-      rawToggle.setAttribute('aria-expanded', 'false');
+    var resultCopy = $('result-copy');
+    if (itemType(latest) === 'clip') {
+      if (resultBody) resultBody.appendChild(makeClipCard(latest, false));
+      if (resultCopy) resultCopy.hidden = true;
+      rawToggle.hidden = true;
+      rawEl.textContent = '';
       rawEl.hidden = true;
     } else {
-      rawEl.textContent = '';
-      rawToggle.hidden = true;
-      rawEl.hidden = true;
+      if (resultBody) {
+        resultBody.appendChild(makeTranscriptText(latest, 'result-text'));
+        resultBody.dataset.copyText = latest.cleaned || '';
+      }
+      if (resultCopy) resultCopy.hidden = false;
+      if (latest.raw && latest.raw !== latest.cleaned) {
+        rawEl.textContent = latest.raw;
+        rawToggle.hidden = false;
+        // Reset to collapsed on each render so the panel doesn't surprise
+        // the user with an open raw block on a new transcription.
+        rawToggle.setAttribute('aria-expanded', 'false');
+        rawEl.hidden = true;
+      } else {
+        rawEl.textContent = '';
+        rawToggle.hidden = true;
+        rawEl.hidden = true;
+      }
     }
     $('result').hidden = false;
   }
@@ -837,7 +1256,7 @@
     if (REC.state !== 'idle' || REC.starting) return;
     REC.starting = true;
     try {
-      var stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      var stream = await getSelectedMicStream();
       REC.stream = stream;
       var pick = pickMimeAndExt();
       REC.mime = pick[0];
@@ -866,10 +1285,13 @@
           REC.stream.getTracks().forEach(function (t) { t.stop(); });
           REC.stream = null;
         }
-        upload(blob, ext);
+        finishRecording(blob, ext, actualMime, REC.mode, Date.now() - REC.recordingStartedAt);
       };
+      REC.mode = S.view;
+      REC.recordingStartedAt = Date.now();
       mr.start();
       setRecState('recording');
+      refreshMicrophones({ quiet: true, validateSelection: true });
       // The meter is created once we know we're actually recording so a
       // permission prompt or device error doesn't leave a stale audio
       // context behind. setRecState above flips data-state to "recording"
@@ -877,7 +1299,7 @@
       startMeter(stream);
     } catch (err) {
       setRecState('idle');
-      $('rec-status').textContent = friendlyMicError(err);
+      setStatus(friendlyMicError(err));
     } finally {
       REC.starting = false;
     }
@@ -920,10 +1342,76 @@
     } catch (e) { /* already stopped */ }
   }
 
+  function blobToDataURL(blob) {
+    return new Promise(function (resolve, reject) {
+      var reader = new FileReader();
+      reader.onload = function () { resolve(String(reader.result || '')); };
+      reader.onerror = function () { reject(reader.error || new Error('read failed')); };
+      reader.readAsDataURL(blob);
+    });
+  }
+
+  async function finishRecording(blob, ext, mime, mode, durationMs) {
+    if (mode === 'mic') {
+      await saveClip(blob, ext, mime, durationMs);
+      return;
+    }
+    await upload(blob, ext);
+  }
+
+  async function saveClip(blob, ext, mime, durationMs) {
+    if (blob.size === 0) {
+      setRecState('idle');
+      setStatus('(no audio captured)');
+      return;
+    }
+    try {
+      var dataURL = await blobToDataURL(blob);
+      var session = currentSession() || createSession();
+      var item = {
+        id: newSessionId(),
+        type: 'clip',
+        ts: Date.now(),
+        title: 'Mic recording',
+        micLabel: selectedMicLabel(),
+        micDeviceId: S.micDeviceId || '',
+        mime: mime || blob.type || 'audio/webm',
+        ext: ext || 'webm',
+        size: blob.size,
+        durationMs: durationMs || 0,
+        dataURL: dataURL
+      };
+      session.items.push(item);
+      if (!persist()) {
+        session.items.pop();
+        setRecState('idle');
+        setStatus('Recording is too large for browser storage.');
+        showToast('Recording not saved', {
+          desc: 'Browser localStorage is full. Try a shorter clip or clear local data.',
+          variant: 'warn',
+          icon: '!',
+          duration: 6000
+        });
+        return;
+      }
+      rerender();
+      setRecState('idle');
+      setStatus('');
+      showToast('Recording saved', {
+        desc: formatDuration(item.durationMs) + ' · ' + formatBytes(item.size),
+        variant: 'success',
+        icon: '✓'
+      });
+    } catch (e) {
+      setRecState('idle');
+      setStatus('Save failed: ' + (e && e.message ? e.message : e));
+    }
+  }
+
   async function upload(blob, ext) {
     if (blob.size === 0) {
       setRecState('idle');
-      $('rec-status').textContent = '(no audio captured)';
+      setStatus('(no audio captured)');
       return;
     }
     var session = currentSession() || createSession();
@@ -946,11 +1434,11 @@
         persist();
         if (rejected) setTokenDraft(rejected);
         setRecState('idle');
-        $('rec-status').textContent = 'Authentication required. Save the token, then record again.';
+        setStatus('Authentication required. Save the token, then transcribe again.');
         setAuthStatus('The server rejected the saved token. Paste the current web token.', 'error');
         openAuthPanel(true);
         showToast('Authentication required', {
-          desc: 'Save the web token before recording.',
+          desc: 'Save the web token before transcription.',
           variant: 'warn',
           icon: '!',
           duration: 6000
@@ -960,28 +1448,31 @@
       if (!resp.ok) {
         var err = await safeJSON(resp);
         setRecState('idle');
-        $('rec-status').textContent = 'Error ' + resp.status + ': ' +
-          (err && err.error ? err.error : resp.statusText);
+        setStatus('Error ' + resp.status + ': ' +
+          (err && err.error ? err.error : resp.statusText));
         return;
       }
       var data = await resp.json();
       var item = {
         id: newSessionId(),
+        type: 'transcript',
         ts: Date.now(),
         raw: data.raw || '',
         cleaned: data.cleaned || '',
+        micLabel: selectedMicLabel(),
+        micDeviceId: S.micDeviceId || '',
         durationMs: data.duration_ms || 0
       };
       if (!item.raw && !item.cleaned) {
         setRecState('idle');
-        $('rec-status').textContent = '(no speech detected)';
+        setStatus('(no speech detected)');
         return;
       }
       session.items.push(item);
       persist();
       rerender();
       setRecState('idle');
-      $('rec-status').textContent = '';
+      setStatus('');
       // Auto-copy the cleaned text if the user opted in. Uses the same
       // clipboard path as the manual Copy buttons (Promise → fallback)
       // and flashes a small status hint instead of taking over a button,
@@ -991,7 +1482,7 @@
       }
     } catch (e) {
       setRecState('idle');
-      $('rec-status').textContent = 'Upload failed: ' + (e && e.message ? e.message : e);
+      setStatus('Upload failed: ' + (e && e.message ? e.message : e));
     }
   }
 
@@ -1016,25 +1507,43 @@
   function exportJSON() {
     var s = currentSession();
     if (!s) return;
-    download('flowstate-session-' + s.id.slice(0, 6) + '.json',
-             JSON.stringify(s, null, 2), 'application/json');
+    var cfg = currentView();
+    var payload = {
+      id: s.id,
+      startedAt: s.startedAt,
+      view: S.view,
+      items: viewItemsFor(s)
+    };
+    download('flowstate-' + cfg.itemType + '-session-' + s.id.slice(0, 6) + '.json',
+             JSON.stringify(payload, null, 2), 'application/json');
   }
 
   function exportMarkdown() {
     var s = currentSession();
     if (!s) return;
+    var cfg = currentView();
+    var items = viewItemsFor(s);
     var lines = [];
-    lines.push('# flowstate session ' + s.id.slice(0, 6));
+    lines.push('# flowstate ' + cfg.label.toLowerCase() + ' session ' + s.id.slice(0, 6));
     lines.push('');
     lines.push('Started: ' + new Date(s.startedAt).toLocaleString());
     lines.push('');
-    for (var i = 0; i < s.items.length; i++) {
-      var it = s.items[i];
+    for (var i = 0; i < items.length; i++) {
+      var it = items[i];
       lines.push('## ' + new Date(it.ts).toLocaleString());
       lines.push('');
-      lines.push(it.cleaned || '_(empty)_');
-      lines.push('');
-      if (it.raw && it.raw !== it.cleaned) {
+      if (itemType(it) === 'clip') {
+        lines.push('- Duration: ' + formatDuration(it.durationMs || 0));
+        lines.push('- Size: ' + formatBytes(it.size || 0));
+        if (it.micLabel) lines.push('- Mic: ' + it.micLabel);
+        lines.push('- MIME: ' + (it.mime || 'audio/webm'));
+        lines.push('');
+        lines.push('Audio data is included in the JSON export.');
+      } else {
+        lines.push(it.cleaned || '_(empty)_');
+        lines.push('');
+      }
+      if (itemType(it) === 'transcript' && it.raw && it.raw !== it.cleaned) {
         lines.push('<details><summary>Raw</summary>');
         lines.push('');
         lines.push(it.raw);
@@ -1045,7 +1554,7 @@
       lines.push('---');
       lines.push('');
     }
-    download('flowstate-session-' + s.id.slice(0, 6) + '.md',
+    download('flowstate-' + cfg.itemType + '-session-' + s.id.slice(0, 6) + '.md',
              lines.join('\n'), 'text/markdown');
   }
 
@@ -1078,7 +1587,7 @@
 
   function pressRecord() {
     if (isAuthBlocked()) {
-      setAuthStatus('Enter the web token to enable recording.', 'warn');
+      setAuthStatus('Enter the web token to enable transcription.', 'warn');
       openAuthPanel(true);
       return;
     }
@@ -1162,7 +1671,19 @@
   }
 
   function bindUI() {
-    DEFAULT_REC_HINT = $('rec-hint') ? $('rec-hint').textContent : '';
+    DEFAULT_REC_HINT = $('rec-hint') ? $('rec-hint').innerHTML : '';
+    var viewTabs = document.querySelectorAll('.view-tab');
+    Array.prototype.forEach.call(viewTabs, function (btn) {
+      btn.addEventListener('click', function () {
+        setView(this.getAttribute('data-view') || 'transcribe');
+      });
+    });
+    window.addEventListener('hashchange', function () {
+      setView(viewFromHash() || 'transcribe', { updateHash: false });
+    });
+    refreshViewUI();
+    bindMicPicker();
+
     $('new-session').addEventListener('click', function () {
       createSession();
       rerender();
@@ -1218,9 +1739,10 @@
       persist();
       rerender();
       var s = currentSession();
+      var cfg = currentView();
+      var count = viewItemsFor(s).length;
       showToast('Switched session', {
-        desc: s ? ('#' + s.id.slice(0, 6) + ' · ' + s.items.length +
-                   (s.items.length === 1 ? ' transcript' : ' transcripts'))
+        desc: s ? ('#' + s.id.slice(0, 6) + ' · ' + formatCount(count, cfg))
                 : null,
         variant: 'info',
         icon: '↻'
@@ -1244,7 +1766,8 @@
       });
     }
     // Clear-local-data button. Confirms first since this wipes every
-    // session, transcript, and the saved token. After clearing we set
+    // session, transcript, mic recording, and the saved token. After
+    // clearing we set
     // a one-shot flag in sessionStorage so the post-reload boot can
     // surface a confirmation toast (the toast wouldn't survive the
     // reload otherwise), then reload so the in-memory state restarts
@@ -1254,13 +1777,15 @@
       clearBtn.addEventListener('click', function () {
         var ok = window.confirm(
           'Clear all local data?\n\n' +
-          'This wipes every session, transcript, and the saved API token ' +
+          'This wipes every session, transcript, mic recording, and the saved API token ' +
           'from this browser. The server is untouched. This cannot be undone.'
         );
         if (!ok) return;
         try {
           localStorage.removeItem('flowstate.sessions');
           localStorage.removeItem('flowstate.currentSessionId');
+          localStorage.removeItem('flowstate.view');
+          localStorage.removeItem('flowstate.micDeviceId');
           localStorage.removeItem('flowstate.token');
           localStorage.removeItem('flowstate.autoCopy');
         } catch (e) { /* ignore quota / disabled storage errors */ }
@@ -1284,8 +1809,8 @@
     // pulls the cleaned text fresh on each click so it always copies the
     // latest transcript, not whatever was here when bindUI ran.
     wireCopy($('result-copy'), function () {
-      var el = $('result-cleaned');
-      return el ? el.textContent : '';
+      var el = $('result-body');
+      return el ? (el.dataset.copyText || '') : '';
     });
   }
 
@@ -1302,11 +1827,11 @@
       AUTH.statusMessage = '';
       AUTH.statusVariant = '';
       refreshAuthUI();
-      if (S.authRequired && !S.token) {
-        setAuthStatus('Enter the web token to enable recording.', 'warn');
+      if (isAuthBlocked()) {
+        setAuthStatus('Enter the web token to enable transcription.', 'warn');
         openAuthPanel(true);
         showToast('API token required', {
-          desc: 'This server requires authentication before recording.',
+          desc: 'This server requires authentication before transcription.',
           variant: 'warn',
           icon: '!',
           duration: 6000
@@ -1314,9 +1839,13 @@
       } else if (S.authRequired && S.token) {
         verifySavedToken();
       } else {
-        setAuthStatus(S.token
-          ? 'This server does not require a token. The saved token will stay local.'
-          : 'No token required for this server.', 'info');
+        if (S.authRequired) {
+          setAuthStatus('Token required for transcription. Mic Record works locally.', 'warn');
+        } else {
+          setAuthStatus(S.token
+            ? 'This server does not require a token. The saved token will stay local.'
+            : 'No token required for this server.', 'info');
+        }
       }
     } catch (e) { /* offline-OK */ }
   }
@@ -1339,7 +1868,7 @@
       if (sessionStorage.getItem('flowstate.cleared') === '1') {
         sessionStorage.removeItem('flowstate.cleared');
         showToast('Local data cleared', {
-          desc: 'Every session, transcript, and saved token has been removed from this browser.',
+          desc: 'Every session, transcript, mic recording, and saved token has been removed from this browser.',
           variant: 'info',
           icon: '✓',
           duration: 3600

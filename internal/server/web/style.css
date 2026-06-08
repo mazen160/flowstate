@@ -12,6 +12,8 @@
 
 * { box-sizing: border-box; }
 
+[hidden] { display: none !important; }
+
 :root {
   /* Surfaces: warm off-white, not stark #fff (easier on the eyes during
      long dictation sessions). Each step lifts in tone, not chroma. */
@@ -115,6 +117,7 @@ body > * { position: relative; z-index: 1; }
   align-items: center;
   justify-content: space-between;
   gap: 16px;
+  flex-wrap: wrap;
 }
 
 .brand {
@@ -163,6 +166,40 @@ body > * { position: relative; z-index: 1; }
   letter-spacing: 0.09em;
   text-transform: uppercase;
   color: var(--text-3);
+}
+
+.view-switch {
+  display: inline-grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 3px;
+  padding: 3px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: color-mix(in oklab, var(--surface-2) 82%, transparent);
+}
+.view-tab {
+  border: 0;
+  border-radius: 7px;
+  padding: 7px 11px;
+  background: transparent;
+  color: var(--text-3);
+  cursor: pointer;
+  font: 13px/1 var(--mono);
+  white-space: nowrap;
+  transition: background 120ms ease, color 120ms ease, box-shadow 120ms ease;
+}
+.view-tab:hover {
+  color: var(--text-2);
+  background: color-mix(in oklab, var(--surface) 65%, transparent);
+}
+.view-tab[aria-pressed="true"] {
+  color: var(--text);
+  background: var(--surface);
+  box-shadow: 0 1px 0 rgba(17, 21, 31, 0.04);
+}
+.view-tab:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
 }
 
 .session-bar {
@@ -476,6 +513,48 @@ kbd {
   text-align: center;
 }
 
+.mic-picker {
+  width: min(100%, 430px);
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 42px;
+  gap: 9px;
+  align-items: end;
+  margin-top: -6px;
+}
+.mic-field {
+  min-width: 0;
+  text-align: left;
+}
+.mic-field select {
+  width: 100%;
+}
+.mic-refresh {
+  width: 42px;
+  height: 42px;
+  display: inline-grid;
+  place-items: center;
+  border: 1px solid var(--line-2);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  color: var(--text-2);
+  cursor: pointer;
+  font: 18px/1 var(--mono);
+  transition: border-color 120ms ease, background 120ms ease, color 120ms ease, box-shadow 120ms ease;
+}
+.mic-refresh:hover {
+  border-color: color-mix(in oklab, var(--c-cyan) 35%, var(--line-2));
+  background: var(--surface-2);
+  color: var(--text);
+}
+.mic-refresh:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
+}
+.mic-refresh:disabled {
+  cursor: not-allowed;
+  opacity: 0.58;
+}
+
 .rec-status {
   min-height: 1.4em;
   margin: 0;
@@ -586,6 +665,9 @@ kbd {
 .copy-btn:hover .copy-icon { color: var(--text-2); }
 .copy-btn[data-state="copied"] .copy-icon { color: var(--c-cyan); }
 
+.result-body {
+  min-width: 0;
+}
 .result-text {
   margin: 0;
   font-size: 19px;
@@ -602,6 +684,36 @@ kbd {
   color: var(--text-2);
   white-space: pre-wrap;
   word-wrap: break-word;
+}
+
+.clip-card {
+  display: grid;
+  gap: 12px;
+}
+.clip-title {
+  margin: 0;
+  color: var(--text);
+  font-size: 17px;
+  font-weight: 600;
+  line-height: 1.35;
+}
+.clip-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 12px;
+  color: var(--text-3);
+  font: 12px/1.4 var(--mono);
+}
+.clip-player {
+  display: block;
+  width: 100%;
+  min-height: 38px;
+}
+.clip-note {
+  margin: 0;
+  color: var(--text-3);
+  font-size: 13px;
+  line-height: 1.5;
 }
 
 /* Show-raw toggle — a real <button> so focus styling is predictable. */
@@ -691,6 +803,13 @@ kbd {
   color: var(--text);
   white-space: pre-wrap;
   word-wrap: break-word;
+}
+.history-clip {
+  display: grid;
+  gap: 10px;
+}
+.history-clip .clip-title {
+  font-size: 15px;
 }
 .history-raw {
   margin: 12px 0 0;
@@ -1018,7 +1137,12 @@ kbd {
 @media (max-width: 540px) {
   .page { padding: 36px 18px 110px; gap: 40px; }
   .topbar-inner, .dock-inner { padding-left: 18px; padding-right: 18px; }
+  .topbar-inner { align-items: flex-start; }
   .brand-tag { display: none; }
+  .view-switch {
+    order: 3;
+    width: 100%;
+  }
   .auth-panel { padding: 18px; }
   .auth-form,
   .token-row {
@@ -1065,6 +1189,10 @@ kbd {
   }
   .btn { box-shadow: none; background: var(--surface-2); }
   .btn:hover { background: var(--surface-3); box-shadow: 0 4px 14px -8px rgba(176, 112, 247, 0.4); }
+  .view-switch { background: var(--surface); }
+  .view-tab[aria-pressed="true"] { background: var(--surface-2); box-shadow: none; }
+  .mic-refresh { background: var(--surface-2); }
+  .mic-refresh:hover { background: var(--surface-3); }
   .btn-primary { background: color-mix(in oklab, var(--c-cyan) 13%, var(--surface-2)); }
   .btn-primary:hover { background: color-mix(in oklab, var(--c-cyan) 18%, var(--surface-3)); }
   .btn-ghost { background: transparent; }
