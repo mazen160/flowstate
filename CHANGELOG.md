@@ -6,6 +6,31 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.0.2] — 2026-06-09
+
+### Added
+- Web UI "Mic Record" tab: a second view alongside Transcribe for recording
+  raw mic clips directly in the browser. Includes tab navigation, a mic
+  device picker with a refresh button, per-recording Copy and Download
+  buttons, and session export. Mic clips and transcripts share the same
+  localStorage-backed session history.
+
+### Fixed
+- Linux paste: `ydotool` is now tried as a fallback when the preferred tool
+  fails at runtime. The selection logic uses an ordered candidate list —
+  Wayland: `wtype → ydotool → xdotool`; X11: `xdotool → ydotool → wtype`
+  — and detects runtime rejections (e.g. `wtype`'s "Compositor does not
+  support the virtual keyboard protocol" on GNOME/KDE) to advance to the
+  next candidate instead of surfacing an error the user cannot act on.
+  Genuinely actionable errors (permission-denied on `/dev/uinput`, etc.)
+  are still surfaced verbatim.
+- Linux trigger: suppressed libuiohook's harmless `XkbGetKeyboard` warning
+  before it reaches the terminal, removing noise on push-to-talk sessions.
+
+### Documentation
+- Linux build prerequisites: added `libxt-dev` to the apt package list
+  required for `gohook` header resolution.
+
 ## [1.0.1] — 2026-05-16
 
 ### Added
