@@ -6,6 +6,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- `flowstate version` no longer prints a doubled `go` prefix. The Go
+  runtime string already carries its own `go` prefix (e.g. `go1.24.5`),
+  so the output is now `flowstate v1.0.2 (go1.24.5)` instead of
+  `flowstate v1.0.2 (go go1.24.5)`.
+- Synced the in-tree default version constant and the documented
+  `flowstate version` / `GET /api/info` examples to `1.0.2`.
+
 ## [1.0.2] — 2026-06-09
 
 ### Added

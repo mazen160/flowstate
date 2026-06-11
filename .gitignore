@@ -18,6 +18,9 @@ coverage.out
 .backlog/
 docs/LAUNCH.md
 docs/RELEASING.md
+launch/
+docs/viral-launch/
+docs/LAUNCH.md
 
 # Local reference clones — not part of this project
 tests/freeflow/

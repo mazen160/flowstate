@@ -1,12 +1,11 @@
 # Launching the rebrand
 
 This is a one-shot runbook for applying the visual / narrative rebrand on
-github.com itself. The repo content is already updated on the
-`rebrand/viral-makeover` branch; the steps below take effect on the GitHub
-side (repo About, topics, social preview, Discussions).
+github.com itself. The repo content is already on `main`; the steps below
+take effect on the GitHub side (repo About, topics, social preview,
+Discussions).
 
-Run them once, after the rebrand PR merges to `main`. None of this requires
-any code changes.
+Run them once. None of this requires any code changes.
 
 ## Prerequisites
 
@@ -73,13 +72,13 @@ Same place as social preview:
 `assets/logo-icon.png` under your org / user avatar if you want the icon
 to show on the repo card.
 
-## 5. Cut the v0.1.0 release
+## 5. Cut the release
 
 The release pipeline is already wired up (see [docs/RELEASING.md](RELEASING.md)).
-Once you're happy with the rebrand, follow that runbook to push a `v0.1.0`
-tag and let CI build + draft the release.
+To ship a release, follow that runbook: update `CHANGELOG.md`, push a
+`vX.Y.Z` tag, and let CI build + draft the release.
 
-After the release is published, the README badges (release version,
-download count once that's added) start populating with real data — which
-is what makes the front of the README feel alive when a stranger lands on
-it for the first time.
+Once a release is published, the README badges (release version, and the
+download count once that's added) populate with real data, which is what
+makes the front of the README feel alive when a stranger lands on it for
+the first time.

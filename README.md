@@ -125,7 +125,7 @@ The pipeline is shared between the CLI (`flowstate`) and the web server (`flowst
 
 ## Status
 
-**v1.0.1**, released and tagged. Tested on macOS, Linux, and Windows; the audio capture, paste-as-keystrokes, and web UI paths have been hand-exercised across the three platforms. Bug reports, recipes, and PRs welcome, see [Contributing](#contributing).
+Released, tagged, and stable, the current version is the one in the release badge above. Tested on macOS, Linux, and Windows; the audio capture, paste-as-keystrokes, and web UI paths have been hand-exercised across the three platforms. Bug reports, recipes, and PRs welcome, see [Contributing](#contributing).
 
 ## Install
 
@@ -342,7 +342,7 @@ curl http://127.0.0.1:8585/api/health
 
 # Discover auth state (always works, no token)
 curl http://127.0.0.1:8585/api/info
-# {"version": "1.0.1", "auth_required": true}
+# {"version": "X.Y.Z", "auth_required": true}
 
 # Verify the web token before storing it
 curl http://127.0.0.1:8585/api/ping \
