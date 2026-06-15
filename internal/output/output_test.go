@@ -6,7 +6,7 @@ import (
 	"testing"
 	"time"
 
-	"golang.design/x/clipboard"
+	"github.com/mazen160/flowstate/internal/clipboard"
 )
 
 // TestWrite_StdoutOnly verifies the simplest path: with only Stdout
@@ -93,7 +93,7 @@ func TestWrite_StdoutAndOther_StdoutStillWrites(t *testing.T) {
 // for headless CI), because the test depends on a real clipboard
 // surface.
 func TestWrite_PreserveClipboard_RestoresWhenUnchanged(t *testing.T) {
-	if err := initClipboard(); err != nil {
+	if _, err := clipboard.Read(); err != nil {
 		t.Skipf("clipboard unavailable: %v", err)
 	}
 
@@ -106,7 +106,7 @@ func TestWrite_PreserveClipboard_RestoresWhenUnchanged(t *testing.T) {
 
 	// Prime the clipboard with the "prior" content the test will
 	// expect to be restored.
-	clipboard.Write(clipboard.FmtText, []byte("before"))
+	_ = clipboard.Write([]byte("before"))
 
 	var buf bytes.Buffer
 	err := WriteWithStdout("hello", Destinations{
@@ -124,7 +124,7 @@ func TestWrite_PreserveClipboard_RestoresWhenUnchanged(t *testing.T) {
 
 	clipboardRestoreWG.Wait()
 
-	got := clipboard.Read(clipboard.FmtText)
+	got, _ := clipboard.Read()
 	if string(got) != "before" {
 		t.Errorf("clipboard should have been restored to %q; got %q", "before", string(got))
 	}
@@ -141,7 +141,7 @@ func TestWrite_PreserveClipboard_RestoresWhenUnchanged(t *testing.T) {
 // to give us a deterministic ordering: write transcript -> overwrite
 // -> wait -> assert.
 func TestWrite_PreserveClipboard_LeavesUserCopyAlone(t *testing.T) {
-	if err := initClipboard(); err != nil {
+	if _, err := clipboard.Read(); err != nil {
 		t.Skipf("clipboard unavailable: %v", err)
 	}
 
@@ -149,7 +149,7 @@ func TestWrite_PreserveClipboard_LeavesUserCopyAlone(t *testing.T) {
 	restoreDelay = 50 * time.Millisecond
 	t.Cleanup(func() { restoreDelay = prev })
 
-	clipboard.Write(clipboard.FmtText, []byte("before"))
+	_ = clipboard.Write([]byte("before"))
 
 	var buf bytes.Buffer
 	err := WriteWithStdout("hello", Destinations{
@@ -163,11 +163,11 @@ func TestWrite_PreserveClipboard_LeavesUserCopyAlone(t *testing.T) {
 	// Simulate the user copying something else right after paste — the
 	// restore goroutine should observe the mismatch and skip the
 	// restore so this fresh copy survives.
-	clipboard.Write(clipboard.FmtText, []byte("user copied this"))
+	_ = clipboard.Write([]byte("user copied this"))
 
 	clipboardRestoreWG.Wait()
 
-	got := clipboard.Read(clipboard.FmtText)
+	got, _ := clipboard.Read()
 	if string(got) != "user copied this" {
 		t.Errorf("user clipboard should be preserved; got %q (want %q)", string(got), "user copied this")
 	}
@@ -181,7 +181,7 @@ func TestWrite_PreserveClipboard_LeavesUserCopyAlone(t *testing.T) {
 // Uses very short delays (~20ms) so the test runs fast. Skipped on hosts
 // without a working clipboard or paste binary.
 func TestWrite_PasteDelay_Sleeps(t *testing.T) {
-	if err := initClipboard(); err != nil {
+	if _, err := clipboard.Read(); err != nil {
 		t.Skipf("clipboard unavailable: %v", err)
 	}
 
@@ -207,7 +207,7 @@ func TestWrite_PasteDelay_Sleeps(t *testing.T) {
 // assert "well under 50ms" which is comfortably above no-delay timing on
 // realistic hosts.
 func TestWrite_PasteDelay_ZeroSkipsSleep(t *testing.T) {
-	if err := initClipboard(); err != nil {
+	if _, err := clipboard.Read(); err != nil {
 		t.Skipf("clipboard unavailable: %v", err)
 	}
 

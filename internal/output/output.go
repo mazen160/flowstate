@@ -21,8 +21,7 @@ import (
 	"sync"
 	"time"
 
-	"golang.design/x/clipboard"
-
+	"github.com/mazen160/flowstate/internal/clipboard"
 	"github.com/mazen160/flowstate/internal/paste"
 )
 
@@ -57,14 +56,6 @@ type Destinations struct {
 	PasteDelay time.Duration
 }
 
-// clipboardInitOnce guards [clipboard.Init], which is a cgo init and must
-// only run once per process. We cache the result so subsequent Write calls
-// fail fast on headless systems instead of re-trying init each time.
-var (
-	clipboardInitOnce sync.Once
-	clipboardInitErr  error
-)
-
 // restoreDelay is how long the preserve-clipboard goroutine waits after
 // the paste keystroke before checking whether to restore the prior
 // clipboard. Exposed as a package var (unexported) so tests can shorten
@@ -76,24 +67,13 @@ var restoreDelay = 500 * time.Millisecond
 // API; production callers never observe it.
 var clipboardRestoreWG sync.WaitGroup
 
-// initClipboard runs clipboard.Init() exactly once, lazily, and caches any
-// error. Returns nil on every subsequent call if the first init succeeded,
-// or the same error if it failed (e.g., no display server).
-func initClipboard() error {
-	clipboardInitOnce.Do(func() {
-		clipboardInitErr = clipboard.Init()
-	})
-	return clipboardInitErr
-}
-
-// writeClipboard pushes text into the system clipboard, lazily initializing
-// the underlying library on first use. The error is wrapped to make the
+// writeClipboard pushes text into the system clipboard via the platform
+// backend in [internal/clipboard]. The error is wrapped to make the
 // "clipboard unavailable" condition easy to spot in user-facing output.
 func writeClipboard(text string) error {
-	if err := initClipboard(); err != nil {
+	if err := clipboard.Write([]byte(text)); err != nil {
 		return fmt.Errorf("clipboard unavailable: %w", err)
 	}
-	clipboard.Write(clipboard.FmtText, []byte(text))
 	return nil
 }
 
@@ -142,13 +122,13 @@ func WriteWithStdout(text string, dests Destinations, stdout io.Writer) error {
 		priorClipboardValid bool
 	)
 	if dests.Paste && dests.PreservePriorClipboard {
-		if err := initClipboard(); err == nil {
-			priorClipboard = clipboard.Read(clipboard.FmtText)
+		if prior, err := clipboard.Read(); err == nil {
+			priorClipboard = prior
 			priorClipboardValid = true
 		}
-		// initClipboard failure here is silent on purpose: the next
-		// clipboard write will surface a "clipboard unavailable"
-		// error if appropriate, and we don't want to double-report.
+		// A read failure here is silent on purpose: the next clipboard
+		// write will surface a "clipboard unavailable" error if
+		// appropriate, and we don't want to double-report.
 	}
 
 	// 3. Clipboard — explicit or implicit (Paste needs it). We track
@@ -202,8 +182,8 @@ func WriteWithStdout(text string, dests Destinations, stdout io.Writer) error {
 					// Bail if reading the clipboard fails for any
 					// reason — we never want to panic the host process
 					// from a background goroutine.
-					current := clipboard.Read(clipboard.FmtText)
-					if current == nil {
+					current, err := clipboard.Read()
+					if err != nil {
 						fmt.Fprintln(os.Stderr, "warning: clipboard restore skipped (read failed)")
 						return
 					}
@@ -213,7 +193,7 @@ func WriteWithStdout(text string, dests Destinations, stdout io.Writer) error {
 					if !bytes.Equal(current, transcript) {
 						return
 					}
-					clipboard.Write(clipboard.FmtText, prior)
+					_ = clipboard.Write(prior)
 				}(priorClipboard, []byte(text))
 			}
 		}

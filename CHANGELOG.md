@@ -6,6 +6,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- **Clipboard output was silently lost on Linux.** `output_mode = clipboard`
+  (half of the default `stdout,clipboard`) relied on an in-process X11/Wayland
+  clipboard owner, but flowstate is a one-shot CLI — the moment it exited, the
+  selection ownership died and the clipboard went empty, so nothing was there
+  to paste. The Linux clipboard now shells out to `wl-copy` / `xclip` / `xsel`
+  (chosen by session, mirroring the paste-tool fallback), which keep the text
+  resident after flowstate exits. macOS and Windows were unaffected (their
+  system pasteboards persist) and keep the existing in-process backend.
+
+### Changed
+- Linux clipboard output now requires one of `wl-copy` (wl-clipboard),
+  `xclip`, or `xsel` to be installed. A run with none installed reports
+  `clipboard unavailable: ... none of wl-copy, xclip, or xsel are installed`
+  instead of failing silently.
+
 ## [1.0.1] — 2026-05-16
 
 ### Added
