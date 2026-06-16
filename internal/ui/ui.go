@@ -18,8 +18,6 @@ import (
 	"sync"
 	"time"
 	"unicode/utf8"
-
-	"golang.org/x/sys/unix"
 )
 
 // ColorMode controls whether ANSI escape codes are emitted by a Reporter.
@@ -117,16 +115,15 @@ func isTerminal(w io.Writer) bool {
 }
 
 // termWidth returns the current terminal width in columns. Returns 0 if
-// the width cannot be determined (not a TTY, or ioctl fails).
+// the width cannot be determined (not a TTY, or the platform query fails).
+// The actual size query is platform-specific — see terminalWidth in
+// width_unix.go / width_windows.go — because the syscalls differ between
+// POSIX (TIOCGWINSZ ioctl) and Windows (the console screen-buffer API).
 func (r *Reporter) termWidth() int {
 	if r.ttyFd < 0 {
 		return 0
 	}
-	ws, err := unix.IoctlGetWinsize(r.ttyFd, unix.TIOCGWINSZ)
-	if err != nil {
-		return 0
-	}
-	return int(ws.Col)
+	return terminalWidth(r.ttyFd)
 }
 
 // truncateLine trims s to at most width visible runes (excluding ANSI escape

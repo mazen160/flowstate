@@ -16,6 +16,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   text is transient). The line is omitted when no destination succeeded.
 
 ### Fixed
+- **Windows build was broken** by the narrow-terminal line-wrap change, which
+  called the Unix-only `TIOCGWINSZ` ioctl from a non-build-tagged file
+  (`undefined: unix.IoctlGetWinsize` on `windows-latest`). Terminal-width
+  detection is now split per-OS — POSIX keeps the ioctl, Windows uses the
+  console screen-buffer API — so all three platforms compile.
 - **Clipboard output was silently lost on Linux.** `output_mode = clipboard`
   (half of the default `stdout,clipboard`) relied on an in-process X11/Wayland
   clipboard owner, but flowstate is a one-shot CLI — the moment it exited, the
