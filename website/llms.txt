@@ -1,0 +1,50 @@
+# flowstate
+
+> Think out loud. Ship in text. flowstate is an open-source speech-to-text CLI
+> with a bundled local web UI. It captures your voice, transcribes it with Groq
+> Whisper, cleans the text with an LLM pass, and writes the result to stdout,
+> the clipboard, the focused app, or the browser. One Go binary, on macOS,
+> Linux, and Windows.
+
+## What it is
+
+- A terminal-native, pipe-friendly dictation CLI: `flowstate`.
+- A bundled local web UI started with `flowstate web` (default 127.0.0.1:8585).
+- The same Go binary, config file, and Groq API key power both interfaces.
+
+## How it works
+
+1. Capture audio (in-process for the CLI, in-browser for the web UI).
+2. Transcribe via Groq Whisper.
+3. Clean up via a Groq LLM pass that removes filler, fixes punctuation, honors
+   self-corrections, preserves domain spellings, and leaves code and command
+   names intact.
+4. Output to stdout, clipboard, paste into the focused app, or the browser
+   (page + history + JSON/Markdown export).
+
+## Install
+
+    go install github.com/mazen160/flowstate/cmd/flowstate@latest
+
+You bring your own Groq API key via the GROQ_API_KEY environment variable. The
+project is free and MIT licensed; the only cost is Groq usage.
+
+## Privacy
+
+The CLI writes only to the destinations you choose. The web server never
+persists audio or transcripts; history lives in the browser's localStorage and
+audio streams straight to Groq without touching disk on the server.
+
+## How it compares
+
+- vs Superwhisper: Superwhisper is Mac only with a local model; flowstate is
+  cross-platform and bring-your-own-key.
+- vs Wispr Flow: Wispr Flow is a subscription with a proprietary model and no
+  CLI; flowstate is free, terminal-native, and scriptable.
+
+## Links
+
+- Repository: https://github.com/mazen160/flowstate
+- Releases: https://github.com/mazen160/flowstate/releases
+- License (MIT): https://github.com/mazen160/flowstate/blob/main/LICENSE
+- Author: Mazin Ahmed, https://mazinahmed.net

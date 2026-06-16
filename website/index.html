@@ -1,0 +1,357 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>flowstate - voice dictation for the terminal and the browser</title>
+    <meta name="description" content="flowstate is an open-source speech-to-text CLI with a bundled local web UI. Groq Whisper transcription plus an LLM cleanup pass, piped to stdout, your clipboard, or any app. Mac, Linux, and Windows, one Go binary.">
+    <meta name="robots" content="index,follow,max-image-preview:large">
+    <meta name="author" content="Mazin Ahmed">
+    <meta name="application-name" content="flowstate">
+    <meta name="theme-color" content="#05060c">
+    <meta name="color-scheme" content="dark">
+    <meta name="keywords" content="flowstate, speech to text CLI, voice dictation terminal, Groq transcription, Whisper CLI, dictation Linux, cross-platform dictation, Wispr Flow alternative, Superwhisper alternative, open source dictation">
+    <link rel="canonical" href="https://flowstate.mazin.xyz/">
+    <link rel="icon" href="assets/logo-icon.png" type="image/png">
+    <link rel="apple-touch-icon" href="assets/logo-icon.png">
+    <link rel="license" href="https://github.com/mazen160/flowstate/blob/main/LICENSE">
+    <link rel="help" href="https://github.com/mazen160/flowstate#readme">
+    <link rel="alternate" type="text/plain" href="llms.txt" title="flowstate information for AI agents">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Hanken+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@300;400;500;700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="style.css">
+
+    <meta property="og:type" content="website">
+    <meta property="og:site_name" content="flowstate">
+    <meta property="og:title" content="flowstate - voice dictation for the terminal and the browser">
+    <meta property="og:description" content="Think out loud. Ship in text. An open-source speech-to-text CLI and local web UI. Groq Whisper plus LLM cleanup, piped wherever you need it. Mac, Linux, Windows.">
+    <meta property="og:image" content="https://flowstate.mazin.xyz/assets/social-card.png">
+    <meta property="og:image:alt" content="flowstate: think out loud, ship in text">
+    <meta property="og:url" content="https://flowstate.mazin.xyz/">
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="flowstate - voice dictation for the terminal and the browser">
+    <meta name="twitter:description" content="Think out loud. Ship in text. Open-source speech-to-text CLI + local web UI. Groq Whisper plus LLM cleanup. Mac, Linux, Windows, one Go binary.">
+    <meta name="twitter:image" content="https://flowstate.mazin.xyz/assets/social-card.png">
+    <meta name="twitter:creator" content="@mazen160">
+
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@graph": [
+        {
+          "@type": "WebSite",
+          "@id": "https://flowstate.mazin.xyz/#website",
+          "name": "flowstate",
+          "url": "https://flowstate.mazin.xyz/",
+          "description": "Open-source speech-to-text CLI and local web UI.",
+          "inLanguage": "en"
+        },
+        {
+          "@type": "SoftwareApplication",
+          "@id": "https://flowstate.mazin.xyz/#software",
+          "name": "flowstate",
+          "url": "https://flowstate.mazin.xyz/",
+          "description": "flowstate is an open-source speech-to-text CLI with a bundled local web UI. It uses Groq Whisper for transcription and an LLM cleanup pass, and writes the cleaned text to stdout, the clipboard, the focused app, or the browser.",
+          "applicationCategory": "DeveloperApplication",
+          "operatingSystem": "macOS, Linux, Windows",
+          "isAccessibleForFree": true,
+          "downloadUrl": "https://github.com/mazen160/flowstate/releases",
+          "installUrl": "https://github.com/mazen160/flowstate#install",
+          "codeRepository": "https://github.com/mazen160/flowstate",
+          "license": "https://github.com/mazen160/flowstate/blob/main/LICENSE",
+          "image": "https://flowstate.mazin.xyz/assets/social-card.png",
+          "author": { "@type": "Person", "name": "Mazin Ahmed", "url": "https://mazinahmed.net" },
+          "offers": { "@type": "Offer", "price": "0", "priceCurrency": "USD" },
+          "featureList": [
+            "Terminal-native, pipe-friendly speech-to-text CLI",
+            "Bundled local web UI (flowstate web)",
+            "Groq Whisper transcription with LLM cleanup pass",
+            "Output to stdout, clipboard, or paste into the focused app",
+            "Bring your own Groq API key",
+            "Cross-platform: macOS, Linux, Windows"
+          ],
+          "sameAs": ["https://github.com/mazen160/flowstate"]
+        },
+        {
+          "@type": "FAQPage",
+          "@id": "https://flowstate.mazin.xyz/#faq",
+          "mainEntity": [
+            {
+              "@type": "Question",
+              "name": "Does flowstate store my audio or transcripts?",
+              "acceptedAnswer": {
+                "@type": "Answer",
+                "text": "No. The CLI writes only to the destinations you choose. The web server never persists audio or transcripts; history lives in your browser's localStorage and audio streams straight to Groq without touching disk on the server."
+              }
+            },
+            {
+              "@type": "Question",
+              "name": "Which platforms does flowstate run on?",
+              "acceptedAnswer": {
+                "@type": "Answer",
+                "text": "macOS, Linux, and Windows. The same Go binary is both the CLI (flowstate) and the local web UI (flowstate web)."
+              }
+            },
+            {
+              "@type": "Question",
+              "name": "How much does flowstate cost?",
+              "acceptedAnswer": {
+                "@type": "Answer",
+                "text": "flowstate is free and MIT licensed. You bring your own Groq API key, so the running cost is whatever Groq charges for transcription and cleanup, which for short dictation is close to nothing."
+              }
+            }
+          ]
+        }
+      ]
+    }
+    </script>
+  </head>
+  <body>
+    <div class="glow" aria-hidden="true"></div>
+
+    <header class="site-header">
+      <div class="wrap">
+        <a class="brand" href="#top" aria-label="flowstate home">
+          <span class="brand-mark" aria-hidden="true">
+            <span class="bar"></span><span class="bar"></span><span class="bar"></span><span class="bar"></span><span class="caret"></span>
+          </span>
+          <span class="brand-name">flowstate</span>
+        </a>
+        <nav class="nav" aria-label="Primary">
+          <a href="#how">How it works</a>
+          <a href="#interfaces">Interfaces</a>
+          <a href="#compare">Compare</a>
+          <a class="stars" href="https://github.com/mazen160/flowstate" title="Star flowstate on GitHub">
+            <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="m12 2 2.96 6 6.62.96-4.79 4.67 1.13 6.59L12 17.11l-5.92 3.11 1.13-6.59-4.79-4.67L9.04 8 12 2Z"/></svg>
+            <span id="github-stars" aria-live="polite">Star on GitHub</span>
+          </a>
+        </nav>
+      </div>
+    </header>
+
+    <main id="top">
+      <section class="hero">
+        <div class="wrap hero-grid">
+          <div class="hero-copy">
+            <p class="eyebrow">Open source · MIT · Mac, Linux, Windows</p>
+            <h1>Think out loud.<br><span class="grad">Ship in text.</span></h1>
+            <p class="lede">A keyboard-free way to think. flowstate captures your voice, cleans it with an LLM, and drops perfect text into any app, from your terminal <em>or your browser</em>.</p>
+
+            <div class="install" role="group" aria-label="Install command">
+              <code id="install-cmd">go install github.com/mazen160/flowstate/cmd/flowstate@latest</code>
+              <button id="copy-btn" type="button" aria-label="Copy install command">Copy</button>
+            </div>
+
+            <div class="cta-row">
+              <a class="btn btn-primary" href="https://github.com/mazen160/flowstate">View on GitHub</a>
+              <a class="btn btn-ghost" href="https://github.com/mazen160/flowstate/releases">Download a release</a>
+            </div>
+
+            <ul class="chips" aria-label="Supported platforms">
+              <li>macOS</li>
+              <li>Linux</li>
+              <li>Windows</li>
+              <li class="chip-accent">Powered by Groq</li>
+            </ul>
+          </div>
+
+          <div class="hero-visual">
+            <div class="term" aria-label="A flowstate terminal session">
+              <div class="term-bar"><span class="d r"></span><span class="d y"></span><span class="d g"></span><span class="term-title">flowstate</span></div>
+              <pre class="term-body"><span class="c-prompt">$</span> flowstate
+<span class="c-dim">● Recording</span> <span class="c-grad">▁▂▄█▆▃▁</span> <span class="c-dim">— press Enter to stop</span>
+<span class="c-dim">● Transcribing…</span>
+<span class="c-dim">● Cleaning up…</span>
+<span class="c-ok">✓ Done. (94 characters, 1.8s)</span>
+
+Hey, just following up on the meeting from
+yesterday. I think we should definitely move
+the deadline to next Friday.</pre>
+            </div>
+            <p class="term-note">Cleaned text lands on stdout <em>and</em> your clipboard. Status goes to stderr, so pipes stay clean.</p>
+          </div>
+        </div>
+      </section>
+
+      <section class="pillars" id="how" aria-label="How it works">
+        <div class="wrap">
+          <div class="pillar-grid">
+            <article class="pillar">
+              <span class="pillar-num">01</span>
+              <h2>Speak</h2>
+              <p>Press Enter, hold a key, or click a button, whichever interface you are in. A live mic meter shows it is listening. No menu-bar app, no daemon.</p>
+            </article>
+            <article class="pillar">
+              <span class="pillar-num">02</span>
+              <h2>Clean</h2>
+              <p>Filler words gone. Punctuation right. Self-corrections honored. Domain spellings preserved. Groq Whisper transcribes, then an LLM pass that knows prose from code.</p>
+            </article>
+            <article class="pillar">
+              <span class="pillar-num">03</span>
+              <h2>Ship</h2>
+              <p>Print to stdout. Copy to clipboard. Paste into the focused app. Or open the web UI and click Copy. A CLI citizen and a browser tab, not an island.</p>
+            </article>
+          </div>
+
+          <figure class="cleanup">
+            <figcaption class="sr-only">Example of the cleanup pass</figcaption>
+            <div class="cleanup-row">
+              <div class="cleanup-block raw">
+                <span class="tag">Raw dictation</span>
+                <p>hey um so just wanted to follow up on the meating from yesterday i think we should definately move the deadline to next friday</p>
+              </div>
+              <div class="cleanup-arrow" aria-hidden="true">→</div>
+              <div class="cleanup-block out">
+                <span class="tag">Cleaned output</span>
+                <p>Hey, just following up on the meeting from yesterday. I think we should definitely move the deadline to next Friday.</p>
+              </div>
+            </div>
+            <div class="cleanup-tags"><span>Fixes punctuation</span><span>Drops filler</span><span>Keeps code and names intact</span></div>
+          </figure>
+        </div>
+      </section>
+
+      <section class="interfaces" id="interfaces" aria-label="Two interfaces, one binary">
+        <div class="wrap interfaces-grid">
+          <div class="interfaces-copy">
+            <p class="eyebrow">One binary, two surfaces</p>
+            <h2>A terminal tool <span class="grad">and</span> a browser tab</h2>
+            <p class="lede sm">The same <code>flowstate</code> binary speaks two interfaces. Same Groq pipeline, same config file, same key. Pick whichever fits the moment.</p>
+            <div class="iface-cards">
+              <div class="iface-card">
+                <h3><code>flowstate</code></h3>
+                <p>Terminal-native and pipe-friendly. Output to stdout, clipboard, paste into the focused app, or all three.</p>
+                <pre class="mini">flowstate | gh issue create --body -
+flowstate | tee -a journal.md</pre>
+              </div>
+              <div class="iface-card">
+                <h3><code>flowstate web</code></h3>
+                <p>A local browser app on 127.0.0.1. Live waveform, tap-to-toggle or hold-to-talk, per-session history, JSON or Markdown export. The server never stores your audio.</p>
+                <pre class="mini">flowstate web</pre>
+              </div>
+            </div>
+          </div>
+          <div class="interfaces-shot">
+            <img src="assets/screenshot-web.png" width="1536" height="1024" loading="lazy" alt="The flowstate web UI: a clean dictation page with a gradient brand mark, a large round record button, and a 'Copied to clipboard' toast">
+          </div>
+        </div>
+      </section>
+
+      <section class="compare" id="compare" aria-label="How flowstate compares">
+        <div class="wrap">
+          <h2>How it compares</h2>
+          <div class="table-scroll">
+            <table>
+              <thead>
+                <tr><th scope="col">&nbsp;</th><th scope="col" class="me">flowstate</th><th scope="col">Wispr Flow</th><th scope="col">Superwhisper</th></tr>
+              </thead>
+              <tbody>
+                <tr><th scope="row">Platforms</th><td class="me">Mac · Linux · Windows</td><td>Mac · Win · mobile</td><td>Mac only</td></tr>
+                <tr><th scope="row">Terminal-native CLI</th><td class="me yes">Yes, pipe-friendly</td><td class="no">No</td><td class="no">No</td></tr>
+                <tr><th scope="row">Local web UI</th><td class="me yes">Yes</td><td class="no">No</td><td class="no">No</td></tr>
+                <tr><th scope="row">Cleanup model</th><td class="me">Groq, your key</td><td>Proprietary</td><td>Proprietary</td></tr>
+                <tr><th scope="row">Cost</th><td class="me">Free + your Groq usage</td><td>Subscription</td><td>One-time license</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <p class="compare-note">Superwhisper is the pick for fully local transcription on a Mac. Wispr Flow is the polished turnkey product. flowstate is the cross-platform, terminal-native, bring-your-own-key one. Pick whichever matches how you work.</p>
+        </div>
+      </section>
+
+      <section class="quickstart" aria-label="Quick start">
+        <div class="wrap quickstart-grid">
+          <div>
+            <h2>Up and running in a minute</h2>
+            <ol class="steps">
+              <li><span class="num">1</span><div><strong>Install.</strong> <code>go install github.com/mazen160/flowstate/cmd/flowstate@latest</code> (or grab a release archive).</div></li>
+              <li><span class="num">2</span><div><strong>Add your key.</strong> <code>export GROQ_API_KEY=gsk_...</code> from <a href="https://console.groq.com">console.groq.com</a>.</div></li>
+              <li><span class="num">3</span><div><strong>Talk.</strong> Run <code>flowstate</code> and press Enter, or run <code>flowstate web</code> and click Record.</div></li>
+            </ol>
+          </div>
+          <div class="quickstart-aside">
+            <p class="eyebrow">Privacy by design</p>
+            <p>No flowstate account, no subscription, no proxy in the middle. The web server never writes your audio or transcripts to disk; history lives in your browser. Your Groq key stays in your environment.</p>
+            <a class="btn btn-primary" href="https://github.com/mazen160/flowstate#install">Read the install guide</a>
+          </div>
+        </div>
+      </section>
+
+      <section class="closer" aria-label="Get started">
+        <div class="wrap">
+          <h2>Stop typing what you could say.</h2>
+          <div class="install" role="group" aria-label="Install command">
+            <code>go install github.com/mazen160/flowstate/cmd/flowstate@latest</code>
+            <button class="copy-btn2" type="button" aria-label="Copy install command">Copy</button>
+          </div>
+          <div class="cta-row center">
+            <a class="btn btn-primary" href="https://github.com/mazen160/flowstate">Star it on GitHub</a>
+            <a class="btn btn-ghost" href="https://github.com/mazen160/flowstate/discussions">Join the discussion</a>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <footer class="site-footer">
+      <div class="wrap footer-top">
+        <div class="footer-brand">
+          <a class="brand" href="#top" aria-label="flowstate home">
+            <span class="brand-mark" aria-hidden="true">
+              <span class="bar"></span><span class="bar"></span><span class="bar"></span><span class="bar"></span><span class="caret"></span>
+            </span>
+            <span class="brand-name">flowstate</span>
+          </a>
+          <p class="footer-tag">Think out loud. Ship in text.</p>
+        </div>
+        <nav class="footer-links" aria-label="Footer">
+          <a href="https://github.com/mazen160/flowstate">GitHub</a>
+          <a href="https://github.com/mazen160/flowstate/releases">Releases</a>
+          <a href="https://github.com/mazen160/flowstate/blob/main/LICENSE">License</a>
+          <a href="https://github.com/mazen160/flowstate/discussions">Discussions</a>
+          <a href="https://twitter.com/mazen160">@mazen160</a>
+        </nav>
+      </div>
+      <div class="wrap footer-base">
+        <p><span class="prompt" aria-hidden="true">$</span> MIT licensed, built by <a href="https://mazinahmed.net">Mazin Ahmed</a></p>
+        <p>© 2026 flowstate</p>
+      </div>
+    </footer>
+
+    <script>
+      (() => {
+        const copyText = "go install github.com/mazen160/flowstate/cmd/flowstate@latest";
+        document.querySelectorAll("#copy-btn, .copy-btn2").forEach((btn) => {
+          btn.addEventListener("click", async () => {
+            try {
+              await navigator.clipboard.writeText(copyText);
+              const prev = btn.textContent;
+              btn.textContent = "Copied";
+              btn.classList.add("copied");
+              setTimeout(() => { btn.textContent = prev; btn.classList.remove("copied"); }, 1600);
+            } catch (_) {}
+          });
+        });
+
+        const starsEl = document.getElementById("github-stars");
+        if (!starsEl) return;
+        const cacheKey = "flowstate.githubStars";
+        const render = (count) => {
+          if (!Number.isFinite(count)) return;
+          starsEl.textContent = count.toLocaleString() + " stars";
+        };
+        try {
+          const cached = JSON.parse(localStorage.getItem(cacheKey) || "null");
+          if (cached && Date.now() - cached.timestamp < 6 * 60 * 60 * 1000) render(cached.count);
+        } catch (_) {}
+        fetch("https://api.github.com/repos/mazen160/flowstate", { headers: { "Accept": "application/vnd.github+json" } })
+          .then((r) => r.ok ? r.json() : Promise.reject())
+          .then((repo) => {
+            const count = Number(repo.stargazers_count);
+            render(count);
+            try { localStorage.setItem(cacheKey, JSON.stringify({ count, timestamp: Date.now() })); } catch (_) {}
+          })
+          .catch(() => {});
+      })();
+    </script>
+  </body>
+</html>

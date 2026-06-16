@@ -138,5 +138,5 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `please subscribe`, `subtitles by…`, etc.) are dropped when Whisper
   reports `no_speech_prob >= 0.1`.
 - All status messages go to stderr; stdout receives only the cleaned
-  transcript. Pipe-safe: `flowstate | jq`, `flowstate > note.md`,
+  transcript. Pipe-safe: `flowstate | wc -w`, `flowstate > note.md`,
   `flowstate | pbcopy` all work cleanly.

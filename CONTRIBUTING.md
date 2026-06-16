@@ -18,14 +18,18 @@ building:
 ```
 sudo apt-get update
 sudo apt-get install -y \
+    build-essential pkg-config \
     libasound2-dev \
-    libx11-dev libxkbcommon-dev libxtst-dev libxinerama-dev libxrandr-dev \
+    libx11-dev libx11-xcb-dev libxtst-dev libxt-dev \
+    libxkbcommon-dev libxkbcommon-x11-dev \
+    libxinerama-dev libxrandr-dev libxcursor-dev libxi-dev \
     pulseaudio-utils alsa-utils
 ```
 
 - `libasound2-dev` provides the ALSA headers used by `malgo`.
-- The five `libx*` packages are needed by `gohook` (libuiohook). All five are
-  required — missing one produces an opaque cgo linker error.
+- The `libx*` and `libxkbcommon*` packages are needed by `gohook` (libuiohook).
+  Missing any one produces an opaque cgo build or linker error; the README's
+  install section has a header-to-package cheat sheet for diagnosing which.
 - `pulseaudio-utils` installs `pactl`, used by the mute package at runtime.
 - `alsa-utils` installs `amixer` (a fallback mute backend).
 
@@ -80,13 +84,9 @@ Embedded prompts live under `internal/prompts/`:
 
 ## Where the design lives
 
-The user-facing surface is documented in `README.md`. The internal design,
-milestone plans, and per-feature specs live in the project's local
-[`.backlog/`](./.backlog) workspace — open it with the `backlog` CLI or read
-the docs directly. Each milestone (M0..M16) is captured as a backlog task with
-linked design docs that explain the rationale behind the current code.
-
-Release process is documented in `docs/RELEASING.md`.
+The user-facing surface is documented in `README.md`, and the release process
+in `docs/RELEASING.md`. The rationale behind a given change lives in the git
+history and `CHANGELOG.md`.
 
 ## Reporting bugs and requesting features
 

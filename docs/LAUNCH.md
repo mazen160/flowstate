@@ -82,3 +82,37 @@ Once a release is published, the README badges (release version, and the
 download count once that's added) populate with real data, which is what
 makes the front of the README feel alive when a stranger lands on it for
 the first time.
+
+## 6. Publish the one-page site (`website/`)
+
+The repo ships a self-contained one-page marketing site under `website/`
+(`index.html` + `style.css` + assets + `CNAME` + `robots.txt` + `sitemap.xml` +
+`llms.txt`). The canonical URL baked into its meta tags is
+`https://flowstate.mazin.xyz/`. If you deploy somewhere else, update the
+`canonical` / `og:url` / `sitemap.xml` / `robots.txt` URLs and the `CNAME`
+file first.
+
+The simplest path is GitHub Pages from a `gh-pages` branch:
+
+```sh
+git subtree push --prefix website origin gh-pages
+```
+
+Then in the repo settings, set Pages to build from the `gh-pages` branch
+(root). The `website/CNAME` file pins the custom domain, so the site serves
+at `https://flowstate.mazin.xyz/` once the DNS record is in place.
+
+DNS: add a `CNAME` record for `flowstate` in the `mazin.xyz` zone pointing to
+`mazen160.github.io.` (an apex would use GitHub Pages' A/AAAA records, but a
+subdomain `CNAME` is the right call here). Enable "Enforce HTTPS" in the Pages
+settings once the cert provisions.
+
+To preview locally before deploying:
+
+```sh
+cd website && python3 -m http.server 8080   # then open http://127.0.0.1:8080
+```
+
+Cloudflare Pages or Netlify work too: point them at the `website/` directory
+with no build command (it is static HTML), then set the custom domain to
+`flowstate.mazin.xyz`.
