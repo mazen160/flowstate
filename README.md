@@ -16,9 +16,11 @@ and drops perfect text into any app, from your terminal <em>or your browser</em>
   <a href="LICENSE"><img alt="MIT" src="https://img.shields.io/badge/license-MIT-a855f7"/></a>
   <img alt="Mac · Linux · Windows" src="https://img.shields.io/badge/platforms-mac%20%7C%20linux%20%7C%20windows-f472b6"/>
   <a href="https://console.groq.com"><img alt="Powered by Groq" src="https://img.shields.io/badge/powered%20by-Groq-ff6c37"/></a>
+  <a href="https://flowstate.mazin.xyz/"><img alt="Website" src="https://img.shields.io/badge/website-flowstate-22d3ee"/></a>
 </p>
 
 <p>
+  <a href="https://flowstate.mazin.xyz/"><strong>Website</strong></a> ·
   <a href="#install">Install</a> ·
   <a href="#quickstart">Quickstart</a> ·
   <a href="#two-interfaces-one-binary">Two interfaces</a> ·
@@ -66,7 +68,7 @@ The same `flowstate` binary speaks two surfaces. Same Groq pipeline, same config
 <td width="50%" valign="top">
 
 ### CLI: `flowstate`
-A terminal-native, pipe-friendly dictation tool. Press Enter to stop, or hold a key to push-to-talk. Output to stdout, clipboard, paste-into-focused-app, or any combination. Built for `flowstate | jq`, `flowstate | gh issue create`, `tee -a journal.md`.
+A terminal-native, pipe-friendly dictation tool. Press Enter to stop, or hold a key to push-to-talk. Output to stdout, clipboard, paste-into-focused-app, or any combination. Built for `flowstate | wc -w`, `flowstate | gh issue create`, `tee -a journal.md`.
 
 </td>
 <td width="50%" valign="top">
@@ -324,6 +326,7 @@ flowstate web --web-interface-listen 0.0.0.0           # LAN access (see warning
 flowstate web --web-token "$(openssl rand -hex 16)"    # require Bearer token
 FLOWSTATE_WEB_TOKEN=secret flowstate web               # token via env
 flowstate web --config /etc/flowstate.toml             # alternate config
+flowstate web --no-browser                             # don't auto-open a tab
 ```
 
 If you bind to a non-loopback interface (anything but `127.0.0.1`, `::1`, or `localhost`) without a token, flowstate prints a loud `⚠ WARNING` on startup so you know any device on your network can hit the API. Either keep the bind on loopback or set `--web-token` (or `FLOWSTATE_WEB_TOKEN`).
@@ -530,6 +533,7 @@ a friendly message naming both env vars if neither is set.
 | `--no-color` | (auto) | Disable ANSI colors on stderr. |
 | `--max-time <secs>` | `0` | Auto-stop recording after N seconds and process. |
 | `--paste-delay <secs>` | `0` | Wait N seconds between clipboard seed and paste keystroke. |
+| `--silent` | (off) | Suppress all stderr (status, warnings, errors). Only the cleaned transcript prints to stdout; use the exit code to detect failure. |
 
 All flags override the matching config field for one invocation only. Unset flags leave the on-disk config untouched.
 
@@ -544,6 +548,7 @@ All flags override the matching config field for one invocation only. Unset flag
 | `--web-interface-listen <host>` | `127.0.0.1` | Interface to bind. Use `0.0.0.0` for LAN; expect a non-loopback warning. |
 | `--web-port <port>` | `8585` | TCP port to listen on. |
 | `--web-token <token>` | `""` | Optional Bearer token for `/api/*`. Falls back to `FLOWSTATE_WEB_TOKEN`. Empty means auth-disabled. |
+| `--no-browser` | (auto-opens) | Don't open a browser tab on startup. By default `flowstate web` opens the UI in your default browser once the listener is ready. |
 
 The web subcommand reads the rest of its behavior (transcription model, cleanup model, language, custom vocabulary, output language, prompts) from the same config file the CLI uses.
 
@@ -636,7 +641,7 @@ While a recording is in flight, flowstate prints staged status lines to **stderr
 - `● Cleaning up…` while the LLM rewrite runs.
 - `✓ Done. (N characters, 2.3s)` at the end.
 
-Errors and soft warnings (mute failure, "no speech detected", config typos) also go to stderr, prefixed with `✗` or `⚠`. **Nothing other than the cleaned transcript is ever written to stdout**, so `flowstate | jq` and similar pipelines stay clean.
+Errors and soft warnings (mute failure, "no speech detected", config typos) also go to stderr, prefixed with `✗` or `⚠`. **Nothing other than the cleaned transcript is ever written to stdout**, so `flowstate | wc -w` and similar pipelines stay clean.
 
 Disable colors with `--no-color`, `NO_COLOR=1`, or `colors = "never"` in the config. Force on with `colors = "always"`. Default is `"auto"` (TTY-detect).
 
@@ -727,8 +732,8 @@ What's shipped, and what's intentionally left out:
 - ✅ Custom vocabulary for domain spellings.
 - 🟡 Streaming transcription.
 - 🟡 Edit-mode subcommand for "rewrite this highlighted text by voice".
-- 🟡 Local redaction of empty space locally.
-- 🟡 Background daemon for the CLI. a CLI invocation is one recording. The web server fills the long-running need. At one point, Flowstate can have shortcut keys to start recording as part of a CLI daemon.
+- 🟡 Local trimming of silent gaps before the audio is sent to Groq.
+- 🟡 Background daemon for the CLI. Today a CLI invocation is one recording, and the web server covers the long-running case. A future daemon could bind global shortcut keys to start a recording without launching the web UI.
 - ❌ Menu bar / system tray native app, flowstate intentionally stays a single binary; the web UI covers the "I want a button to click" use case.
 - ❌ Offline / local transcription, flowstate calls Groq.
 - ❌ OS-keychain integration, the Groq API key lives in `GROQ_API_KEY`.
@@ -740,12 +745,6 @@ Want one of the 🟡s sooner? Open an issue or chime in on Discussions.
 PRs welcome. See [CONTRIBUTING.md](CONTRIBUTING.md) for the dev environment, build, and test workflow.
 
 If you're using flowstate in your daily workflow, share what you built in [Discussions → Show & Tell](https://github.com/mazen160/flowstate/discussions/categories/show-and-tell). Workflow tips and config snippets help everyone.
-
-## Credits
-
-Inspired by [FreeFlow](https://github.com/zachlatta/freeflow) (Swift, macOS) by Zach Latta, which provides the wire-level reference for the Groq pipeline, and by [Wispr Flow](https://wisprflow.ai), which set the bar for what voice-driven dictation should feel like.
-
----
 
 ## License
 
