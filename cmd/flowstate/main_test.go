@@ -6,6 +6,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 
@@ -23,8 +24,8 @@ func TestVersionSubcommand(t *testing.T) {
 	if !strings.Contains(got, "flowstate") {
 		t.Fatalf("version output missing 'flowstate': %q", got)
 	}
-	if !strings.Contains(got, "go ") {
-		t.Fatalf("version output missing Go runtime: %q", got)
+	if !strings.Contains(got, runtime.Version()) {
+		t.Fatalf("version output missing Go runtime %q: %q", runtime.Version(), got)
 	}
 }
 

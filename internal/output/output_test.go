@@ -14,7 +14,7 @@ import (
 // by a newline, and no error is returned.
 func TestWrite_StdoutOnly(t *testing.T) {
 	var buf bytes.Buffer
-	err := WriteWithStdout("hello", Destinations{Stdout: true}, &buf)
+	_, err := WriteWithStdout("hello", Destinations{Stdout: true}, &buf)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -31,7 +31,7 @@ func TestWrite_StdoutOnly(t *testing.T) {
 // returns without panicking and surfaces a recognizable error format.
 func TestWrite_ClipboardOnly_FailsGracefully(t *testing.T) {
 	var buf bytes.Buffer
-	err := WriteWithStdout("hello", Destinations{Clipboard: true}, &buf)
+	_, err := WriteWithStdout("hello", Destinations{Clipboard: true}, &buf)
 	if err != nil && !strings.Contains(err.Error(), "clipboard unavailable") {
 		t.Errorf(
 			"expected nil or an error containing %q, got: %v",
@@ -45,12 +45,44 @@ func TestWrite_ClipboardOnly_FailsGracefully(t *testing.T) {
 	}
 }
 
+// TestWrite_Result_StdoutReported verifies the Result reflects a successful
+// stdout write so the caller can confirm the destination to the user.
+func TestWrite_Result_StdoutReported(t *testing.T) {
+	var buf bytes.Buffer
+	res, err := WriteWithStdout("hello", Destinations{Stdout: true}, &buf)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !res.Stdout {
+		t.Error("Result.Stdout should be true after a successful stdout write")
+	}
+	if res.Clipboard || res.Pasted {
+		t.Errorf("only stdout was requested; got %+v", res)
+	}
+	if !res.Any() {
+		t.Error("Result.Any() should be true when stdout succeeded")
+	}
+}
+
+// TestWrite_Result_NothingEnabled: with no destinations, the Result reports
+// no successes and Any() is false.
+func TestWrite_Result_NothingEnabled(t *testing.T) {
+	var buf bytes.Buffer
+	res, err := WriteWithStdout("hello", Destinations{}, &buf)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if res.Any() {
+		t.Errorf("no destinations enabled; Result.Any() should be false, got %+v", res)
+	}
+}
+
 // TestWrite_NothingEnabled: an all-false Destinations is a legal config
 // (e.g., the user disabled every output and is just stress-testing the
 // pipeline). Should be a clean no-op.
 func TestWrite_NothingEnabled(t *testing.T) {
 	var buf bytes.Buffer
-	err := WriteWithStdout("hello", Destinations{}, &buf)
+	_, err := WriteWithStdout("hello", Destinations{}, &buf)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -66,7 +98,7 @@ func TestWrite_NothingEnabled(t *testing.T) {
 // stdout.
 func TestWrite_StdoutAndOther_StdoutStillWrites(t *testing.T) {
 	var buf bytes.Buffer
-	_ = WriteWithStdout(
+	_, _ = WriteWithStdout(
 		"hello",
 		Destinations{Stdout: true, Clipboard: true},
 		&buf,
@@ -109,7 +141,7 @@ func TestWrite_PreserveClipboard_RestoresWhenUnchanged(t *testing.T) {
 	_ = clipboard.Write([]byte("before"))
 
 	var buf bytes.Buffer
-	err := WriteWithStdout("hello", Destinations{
+	_, err := WriteWithStdout("hello", Destinations{
 		Paste:                  true,
 		PreservePriorClipboard: true,
 	}, &buf)
@@ -152,7 +184,7 @@ func TestWrite_PreserveClipboard_LeavesUserCopyAlone(t *testing.T) {
 	_ = clipboard.Write([]byte("before"))
 
 	var buf bytes.Buffer
-	err := WriteWithStdout("hello", Destinations{
+	_, err := WriteWithStdout("hello", Destinations{
 		Paste:                  true,
 		PreservePriorClipboard: true,
 	}, &buf)
@@ -188,7 +220,7 @@ func TestWrite_PasteDelay_Sleeps(t *testing.T) {
 	delay := 20 * time.Millisecond
 	var buf bytes.Buffer
 	start := time.Now()
-	err := WriteWithStdout("hello", Destinations{
+	_, err := WriteWithStdout("hello", Destinations{
 		Paste:      true,
 		PasteDelay: delay,
 	}, &buf)
@@ -213,7 +245,7 @@ func TestWrite_PasteDelay_ZeroSkipsSleep(t *testing.T) {
 
 	var buf bytes.Buffer
 	start := time.Now()
-	err := WriteWithStdout("hello", Destinations{
+	_, err := WriteWithStdout("hello", Destinations{
 		Paste:      true,
 		PasteDelay: 0,
 	}, &buf)

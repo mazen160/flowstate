@@ -38,6 +38,36 @@ func TestReporter_NoANSIWhenWriterIsBuffer(t *testing.T) {
 	}
 }
 
+// TestReporter_Done_RendersOutputs verifies the destination confirmation
+// line: when DoneStats.Outputs is set, Done prints a "→ a · b" trailing line
+// listing what received the text. This is the user-facing confirmation that
+// the transcript was copied / pasted / printed.
+func TestReporter_Done_RendersOutputs(t *testing.T) {
+	var buf bytes.Buffer
+	r := NewReporter(&buf, ColorNever)
+	r.Done(DoneStats{
+		Chars:   12,
+		Outputs: []string{"printed to stdout", "copied to clipboard"},
+	})
+
+	out := buf.String()
+	if !strings.Contains(out, "→ printed to stdout · copied to clipboard") {
+		t.Fatalf("Done output missing destination confirmation line:\n%q", out)
+	}
+}
+
+// TestReporter_Done_OmitsOutputsWhenEmpty pins that no trailing arrow line is
+// printed when there were no successful destinations.
+func TestReporter_Done_OmitsOutputsWhenEmpty(t *testing.T) {
+	var buf bytes.Buffer
+	r := NewReporter(&buf, ColorNever)
+	r.Done(DoneStats{Chars: 5})
+
+	if strings.Contains(buf.String(), "→") {
+		t.Fatalf("Done should not print an outputs line when Outputs is empty:\n%q", buf.String())
+	}
+}
+
 // TestReporter_ANSIEmittedWhenColorAlways verifies the force-on override:
 // even though a bytes.Buffer is not a TTY, ColorAlways must still emit
 // escape codes. This is the path for users running flowstate inside

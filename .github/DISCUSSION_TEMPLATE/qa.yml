@@ -14,7 +14,7 @@ body:
     attributes:
       label: flowstate version
       description: Output of `flowstate version`.
-      placeholder: "flowstate v0.1.0 (go 1.24.x)"
+      placeholder: "flowstate vX.Y.Z (go1.24.x)"
     validations:
       required: true
   - type: dropdown

@@ -52,6 +52,24 @@ func resolveColorMode(cfgColors string, noColorFlag bool, env func(string) strin
 	}
 }
 
+// outputLabels turns an [output.Result] into the human-readable
+// confirmations shown on the Done line, in pipeline order (stdout → clipboard
+// → paste). Returns nil when nothing succeeded so the Done renderer omits the
+// line entirely.
+func outputLabels(r output.Result) []string {
+	var labels []string
+	if r.Stdout {
+		labels = append(labels, "printed to stdout")
+	}
+	if r.Clipboard {
+		labels = append(labels, "copied to clipboard")
+	}
+	if r.Pasted {
+		labels = append(labels, "pasted into focused app")
+	}
+	return labels
+}
+
 // runRecord is the default pipeline. It parses record-mode flags, loads the
 // config, resolves the Groq API key from the environment (with a friendly
 // error if it's not set), and then walks the
@@ -271,20 +289,23 @@ func runRecord(ctx context.Context, args []string, stdin io.Reader, stdout, stde
 	if pasteOn && cfg.PasteDelaySeconds > 0 {
 		reporter.Step(fmt.Sprintf("Pasting in %ds — switch to destination window", cfg.PasteDelaySeconds))
 	}
-	if err := output.WriteWithStdout(cleaned, dests, stdout); err != nil {
+	result, err := output.WriteWithStdout(cleaned, dests, stdout)
+	if err != nil {
 		reporter.Error("output: %v", err)
 		return 1
 	}
 
 	// 14. Status line on stderr so stdout (which may have been piped to
 	// another command) stays clean. Routed through the reporter so colors
-	// + the duration tail come along for the ride.
+	// + the duration tail come along for the ride. The Outputs slice
+	// confirms which destinations actually received the text.
 	reporter.Done(ui.DoneStats{
 		Chars:       len(cleaned),
 		Words:       ui.CountWords(cleaned),
 		Tokens:      ui.EstimateTokens(cleaned),
 		RecordTime:  recDur,
 		ProcessTime: time.Since(procStart),
+		Outputs:     outputLabels(result),
 	})
 	return 0
 }

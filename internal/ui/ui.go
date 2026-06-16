@@ -330,6 +330,11 @@ type DoneStats struct {
 	Tokens      int           // estimated token count (~chars/4 heuristic)
 	RecordTime  time.Duration // wall time spent recording audio
 	ProcessTime time.Duration // wall time spent on transcribe + cleanup + output
+
+	// Outputs holds human-readable confirmations of which destinations
+	// received the text, e.g. {"copied to clipboard", "pasted"}. Rendered
+	// as a trailing line; omitted entirely when empty.
+	Outputs []string
 }
 
 // Total returns RecordTime + ProcessTime — the user-perceived wall clock
@@ -365,28 +370,38 @@ func (r *Reporter) Done(s DoneStats) {
 	}
 	fmt.Fprintf(r.w, "%s %s\n", check, headline)
 
-	// Second line: timing breakdown. Skipped entirely when nothing is
-	// set. Each component is printed only if non-zero so partial inputs
-	// don't render "rec 0ms · proc 1.8s".
-	if s.RecordTime == 0 && s.ProcessTime == 0 {
-		return
+	// Second line: timing breakdown. Skipped when nothing is set. Each
+	// component is printed only if non-zero so partial inputs don't render
+	// "rec 0ms · proc 1.8s".
+	if s.RecordTime != 0 || s.ProcessTime != 0 {
+		var timingParts []string
+		if s.RecordTime > 0 {
+			timingParts = append(timingParts, "recording "+formatDuration(s.RecordTime))
+		}
+		if s.ProcessTime > 0 {
+			timingParts = append(timingParts, "processing "+formatDuration(s.ProcessTime))
+		}
+		if total := s.Total(); total > 0 && len(timingParts) > 1 {
+			timingParts = append(timingParts, "total "+formatDuration(total))
+		}
+		timing := "  " + strings.Join(timingParts, " · ")
+		if r.color {
+			// Dim cyan to keep the eye on the headline.
+			timing = ansiCyan + timing + ansiReset
+		}
+		fmt.Fprintf(r.w, "%s\n", timing)
 	}
-	var timingParts []string
-	if s.RecordTime > 0 {
-		timingParts = append(timingParts, "recording "+formatDuration(s.RecordTime))
+
+	// Third line: which destinations received the text, e.g.
+	// "→ copied to clipboard · pasted". Omitted when no destinations
+	// reported success.
+	if len(s.Outputs) > 0 {
+		outputs := "  → " + strings.Join(s.Outputs, " · ")
+		if r.color {
+			outputs = ansiCyan + outputs + ansiReset
+		}
+		fmt.Fprintf(r.w, "%s\n", outputs)
 	}
-	if s.ProcessTime > 0 {
-		timingParts = append(timingParts, "processing "+formatDuration(s.ProcessTime))
-	}
-	if total := s.Total(); total > 0 && len(timingParts) > 1 {
-		timingParts = append(timingParts, "total "+formatDuration(total))
-	}
-	timing := "  " + strings.Join(timingParts, " · ")
-	if r.color {
-		// Dim cyan to keep the eye on the headline.
-		timing = ansiCyan + timing + ansiReset
-	}
-	fmt.Fprintf(r.w, "%s\n", timing)
 }
 
 // CountWords returns the whitespace-split word count of s. Empty / all-

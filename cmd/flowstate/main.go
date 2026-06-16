@@ -28,7 +28,7 @@ import (
 // Untagged `make build` from a clean tree reads the latest tag via
 // `git describe --tags`, so this constant only surfaces in builds made
 // without the Makefile.
-var version = "1.0.1"
+var version = "1.0.2"
 
 // helpText is what `flowstate --help` (and `flowstate -h`) prints. Short by
 // design: details live in the man-page-style README, not in --help.
@@ -113,7 +113,8 @@ func run(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 }
 
 // runVersion prints the build identifier and Go toolchain version. Kept tiny
-// and on stdout so it's easy to capture in CI smoke tests.
+// and on stdout so it's easy to capture in CI smoke tests. runtime.Version()
+// already carries its own "go" prefix (e.g. "go1.24.5"), so we don't add one.
 func runVersion(stdout io.Writer) {
-	fmt.Fprintf(stdout, "flowstate %s (go %s)\n", version, runtime.Version())
+	fmt.Fprintf(stdout, "flowstate %s (%s)\n", version, runtime.Version())
 }

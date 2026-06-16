@@ -6,6 +6,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- The `✓ Done` summary now confirms which destinations received the text on
+  a trailing line, e.g. `→ printed to stdout · copied to clipboard · pasted
+  into focused app`. Only destinations that actually succeeded are listed
+  (a clipboard seeded solely to back a paste keystroke is not, since that
+  text is transient). The line is omitted when no destination succeeded.
+
 ### Fixed
 - **Clipboard output was silently lost on Linux.** `output_mode = clipboard`
   (half of the default `stdout,clipboard`) relied on an in-process X11/Wayland
@@ -15,12 +22,43 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   (chosen by session, mirroring the paste-tool fallback), which keep the text
   resident after flowstate exits. macOS and Windows were unaffected (their
   system pasteboards persist) and keep the existing in-process backend.
+- `flowstate version` no longer prints a doubled `go` prefix. The Go
+  runtime string already carries its own `go` prefix (e.g. `go1.24.5`),
+  so the output is now `flowstate v1.0.2 (go1.24.5)` instead of
+  `flowstate v1.0.2 (go go1.24.5)`.
+- Synced the in-tree default version constant and the documented
+  `flowstate version` / `GET /api/info` examples to `1.0.2`.
 
 ### Changed
 - Linux clipboard output now requires one of `wl-copy` (wl-clipboard),
   `xclip`, or `xsel` to be installed. A run with none installed reports
   `clipboard unavailable: ... none of wl-copy, xclip, or xsel are installed`
   instead of failing silently.
+
+## [1.0.2] — 2026-06-09
+
+### Added
+- Web UI "Mic Record" tab: a second view alongside Transcribe for recording
+  raw mic clips directly in the browser. Includes tab navigation, a mic
+  device picker with a refresh button, per-recording Copy and Download
+  buttons, and session export. Mic clips and transcripts share the same
+  localStorage-backed session history.
+
+### Fixed
+- Linux paste: `ydotool` is now tried as a fallback when the preferred tool
+  fails at runtime. The selection logic uses an ordered candidate list —
+  Wayland: `wtype → ydotool → xdotool`; X11: `xdotool → ydotool → wtype`
+  — and detects runtime rejections (e.g. `wtype`'s "Compositor does not
+  support the virtual keyboard protocol" on GNOME/KDE) to advance to the
+  next candidate instead of surfacing an error the user cannot act on.
+  Genuinely actionable errors (permission-denied on `/dev/uinput`, etc.)
+  are still surfaced verbatim.
+- Linux trigger: suppressed libuiohook's harmless `XkbGetKeyboard` warning
+  before it reaches the terminal, removing noise on push-to-talk sessions.
+
+### Documentation
+- Linux build prerequisites: added `libxt-dev` to the apt package list
+  required for `gohook` header resolution.
 
 ## [1.0.1] — 2026-05-16
 

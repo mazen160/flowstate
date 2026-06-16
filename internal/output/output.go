@@ -77,10 +77,29 @@ func writeClipboard(text string) error {
 	return nil
 }
 
+// Result reports which destinations actually received the text, so callers
+// can confirm to the user what happened (e.g. "copied to clipboard").
+//
+// A field is true only when that destination genuinely succeeded:
+//   - Stdout: the text was written to the stdout writer without error.
+//   - Clipboard: the caller asked for clipboard AND the write succeeded.
+//     A clipboard seeded purely to back a paste keystroke (Paste without
+//     Clipboard) does NOT set this — that text is transient and may be
+//     restored away by PreservePriorClipboard.
+//   - Pasted: the paste keystroke fired without error.
+type Result struct {
+	Stdout    bool
+	Clipboard bool
+	Pasted    bool
+}
+
+// Any reports whether at least one destination succeeded.
+func (r Result) Any() bool { return r.Stdout || r.Clipboard || r.Pasted }
+
 // Write emits text to every destination enabled in dests. Stdout writes go
 // to [os.Stdout]; use [WriteWithStdout] to substitute a different writer for
 // testing.
-func Write(text string, dests Destinations) error {
+func Write(text string, dests Destinations) (Result, error) {
 	return WriteWithStdout(text, dests, os.Stdout)
 }
 
@@ -98,8 +117,9 @@ func Write(text string, dests Destinations) error {
 // the snapshot after restoreDelay — but only if the clipboard still
 // contains the transcript we wrote (so an unrelated user copy isn't
 // stomped on).
-func WriteWithStdout(text string, dests Destinations, stdout io.Writer) error {
+func WriteWithStdout(text string, dests Destinations, stdout io.Writer) (Result, error) {
 	var firstErr error
+	var result Result
 
 	// 1. Stdout — independent of the clipboard, runs first so users see
 	//    output immediately even if downstream steps fail.
@@ -108,6 +128,8 @@ func WriteWithStdout(text string, dests Destinations, stdout io.Writer) error {
 			if firstErr == nil {
 				firstErr = err
 			}
+		} else {
+			result.Stdout = true
 		}
 	}
 
@@ -149,6 +171,13 @@ func WriteWithStdout(text string, dests Destinations, stdout io.Writer) error {
 			}
 		} else {
 			clipboardSeeded = true
+			// Only report a clipboard *destination* success when the
+			// caller explicitly asked for it. A clipboard seeded solely
+			// to back a paste keystroke is transient (and may be restored
+			// away), so it isn't a result the user should rely on.
+			if dests.Clipboard {
+				result.Clipboard = true
+			}
 		}
 	}
 
@@ -169,35 +198,38 @@ func WriteWithStdout(text string, dests Destinations, stdout io.Writer) error {
 				if firstErr == nil {
 					firstErr = err
 				}
-			} else if dests.PreservePriorClipboard && priorClipboardValid {
-				// Paste keystroke fired successfully; schedule a
-				// best-effort restore of the prior clipboard. The
-				// goroutine is fire-and-forget so callers don't have to
-				// wait restoreDelay before continuing. Tests sync via
-				// clipboardRestoreWG.
-				clipboardRestoreWG.Add(1)
-				go func(prior []byte, transcript []byte) {
-					defer clipboardRestoreWG.Done()
-					time.Sleep(restoreDelay)
-					// Bail if reading the clipboard fails for any
-					// reason — we never want to panic the host process
-					// from a background goroutine.
-					current, err := clipboard.Read()
-					if err != nil {
-						fmt.Fprintln(os.Stderr, "warning: clipboard restore skipped (read failed)")
-						return
-					}
-					// Only restore if the clipboard still holds the
-					// transcript we just set. If the user copied
-					// something else, leave that fresh copy alone.
-					if !bytes.Equal(current, transcript) {
-						return
-					}
-					_ = clipboard.Write(prior)
-				}(priorClipboard, []byte(text))
+			} else {
+				result.Pasted = true
+				if dests.PreservePriorClipboard && priorClipboardValid {
+					// Paste keystroke fired successfully; schedule a
+					// best-effort restore of the prior clipboard. The
+					// goroutine is fire-and-forget so callers don't have to
+					// wait restoreDelay before continuing. Tests sync via
+					// clipboardRestoreWG.
+					clipboardRestoreWG.Add(1)
+					go func(prior []byte, transcript []byte) {
+						defer clipboardRestoreWG.Done()
+						time.Sleep(restoreDelay)
+						// Bail if reading the clipboard fails for any
+						// reason — we never want to panic the host process
+						// from a background goroutine.
+						current, err := clipboard.Read()
+						if err != nil {
+							fmt.Fprintln(os.Stderr, "warning: clipboard restore skipped (read failed)")
+							return
+						}
+						// Only restore if the clipboard still holds the
+						// transcript we just set. If the user copied
+						// something else, leave that fresh copy alone.
+						if !bytes.Equal(current, transcript) {
+							return
+						}
+						_ = clipboard.Write(prior)
+					}(priorClipboard, []byte(text))
+				}
 			}
 		}
 	}
 
-	return firstErr
+	return result, firstErr
 }
