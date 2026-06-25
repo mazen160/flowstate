@@ -6,6 +6,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.0.4] — 2026-06-25
+
+### Fixed
+- Default `cleanup_fallback_model` updated from the deprecated
+  `meta-llama/llama-4-scout-17b-16e-instruct` (decommissioned July 17, 2026)
+  to `llama-3.3-70b-versatile`. Existing configs with the old model id will
+  continue to work until Groq decommissions it; update your config file to
+  pick up the new default.
+
 ## [1.0.3] — 2026-06-15
 
 ### Added
