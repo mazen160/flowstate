@@ -1,7 +1,7 @@
 // Package cleanup — request body assembly.
 //
 // buildRequestBody assembles the JSON body for POST /chat/completions. The
-// shape and the conditional gpt-oss-20b fields are pinned by the
+// shape and the conditional GPT OSS fields are pinned by the
 // "Groq Provider Contract" doc and ported from the upstream cleanup service.
 package cleanup
 
@@ -10,16 +10,16 @@ import (
 	"fmt"
 )
 
-// gptOSS20BModel is the model id that triggers the three conditional fields
-// (max_completion_tokens, reasoning_effort, include_reasoning). Any other
-// model — including the llama-4-scout fallback — must NOT carry those
-// fields in the request body.
-const gptOSS20BModel = "openai/gpt-oss-20b"
+// GPT OSS models support the three cleanup-specific fields
+// (max_completion_tokens, reasoning_effort, include_reasoning). Other models
+// must not carry them because provider support varies by model.
+const (
+	gptOSS20BModel  = "openai/gpt-oss-20b"
+	gptOSS120BModel = "openai/gpt-oss-120b"
+)
 
-// Conditional-field constants for the gpt-oss-20b model. Hard-coded here
-// rather than parameterized because every reference implementation
-// (the upstream reference, the contract doc) pins them; making them configurable would
-// only invite drift.
+// Conditional-field constants for GPT OSS models. Hard-coded here rather than
+// parameterized so both primary and fallback cleanup requests behave consistently.
 const (
 	postProcessingMaxCompletionTokens = 4096
 	postProcessingReasoningEffort     = "low"
@@ -34,7 +34,7 @@ type chatMessageOut struct {
 }
 
 // chatRequest is the base request shape sent for every model. The
-// conditional gpt-oss-20b fields are appended in [buildRequestBody] by
+// conditional GPT OSS fields are appended in [buildRequestBody] by
 // re-marshaling, because struct-with-omitempty would force pointer types
 // (or sentinel "magic" values) and obscure the doc's "always sent for X,
 // never for Y" contract.
@@ -55,9 +55,9 @@ type chatRequest struct {
 //
 //	RAW_TRANSCRIPTION: "<transcript>"
 //
-// The three gpt-oss-20b-only fields are added by merging into a map after
-// the base struct is marshaled, so they ONLY appear in the JSON when
-// model == "openai/gpt-oss-20b" (no zero values, no omitempty guesswork).
+// The three GPT OSS fields are added by merging into a map after the base
+// struct is marshaled, so they only appear for supported GPT OSS model IDs
+// (no zero values, no omitempty guesswork).
 func buildRequestBody(model, systemPrompt, transcript, contextSummary string) ([]byte, error) {
 	userMessage := fmt.Sprintf(
 		"Instructions: Clean up RAW_TRANSCRIPTION and return only the cleaned transcript text without surrounding quotes. Return EMPTY if there should be no result.\n\nCONTEXT: \"%s\"\n\nRAW_TRANSCRIPTION: \"%s\"",
@@ -74,12 +74,12 @@ func buildRequestBody(model, systemPrompt, transcript, contextSummary string) ([
 		},
 	}
 
-	if model != gptOSS20BModel {
+	if !isGPTOSSModel(model) {
 		return json.Marshal(base)
 	}
 
 	// Re-marshal through a map so the three extra fields appear in the
-	// body exclusively for gpt-oss-20b. Going through a map costs one
+	// body exclusively for GPT OSS models. Going through a map costs one
 	// extra unmarshal/marshal but keeps the conditional contract explicit
 	// — see the doc note above.
 	raw, err := json.Marshal(base)
@@ -94,4 +94,8 @@ func buildRequestBody(model, systemPrompt, transcript, contextSummary string) ([
 	generic["reasoning_effort"] = postProcessingReasoningEffort
 	generic["include_reasoning"] = false
 	return json.Marshal(generic)
+}
+
+func isGPTOSSModel(model string) bool {
+	return model == gptOSS20BModel || model == gptOSS120BModel
 }

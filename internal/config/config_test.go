@@ -97,6 +97,15 @@ func TestInit_WritesFileWithPrompts(t *testing.T) {
 	if !cfg.MuteWhileRecording {
 		t.Errorf("MuteWhileRecording = false; want true")
 	}
+	if cfg.TranscriptionModel != "whisper-large-v3" {
+		t.Errorf("TranscriptionModel = %q; want %q", cfg.TranscriptionModel, "whisper-large-v3")
+	}
+	if cfg.CleanupModel != "openai/gpt-oss-20b" {
+		t.Errorf("CleanupModel = %q; want %q", cfg.CleanupModel, "openai/gpt-oss-20b")
+	}
+	if cfg.CleanupFallbackModel != "openai/gpt-oss-120b" {
+		t.Errorf("CleanupFallbackModel = %q; want %q", cfg.CleanupFallbackModel, "openai/gpt-oss-120b")
+	}
 }
 
 // TestInit_RefusesExisting verifies the no-clobber default behavior.
@@ -180,7 +189,7 @@ ptt_key = "f12"
 base_url = "https://example.com/v1"
 transcription_model = "whisper-large-v3"
 cleanup_model = "openai/gpt-oss-20b"
-cleanup_fallback_model = "meta-llama/llama-4-scout-17b-16e-instruct"
+cleanup_fallback_model = "openai/gpt-oss-120b"
 output_mode = "stdout"
 mute_while_recording = false
 active_prompt = "default"
@@ -220,7 +229,7 @@ ptt_key = "space"
 base_url = "https://api.groq.com/openai/v1"
 transcription_model = "whisper-large-v3"
 cleanup_model = "openai/gpt-oss-20b"
-cleanup_fallback_model = "meta-llama/llama-4-scout-17b-16e-instruct"
+cleanup_fallback_model = "openai/gpt-oss-120b"
 output_mode = "stdout"
 mute_while_recording = true
 active_prompt = "default"
@@ -471,7 +480,7 @@ ptt_key = "space"
 base_url = "https://api.groq.com/openai/v1"
 transcription_model = "whisper-large-v3"
 cleanup_model = "openai/gpt-oss-20b"
-cleanup_fallback_model = "meta-llama/llama-4-scout-17b-16e-instruct"
+cleanup_fallback_model = "openai/gpt-oss-120b"
 output_mode = "stdout,clipboard,paste"
 mute_while_recording = true
 active_prompt = "default"
@@ -576,7 +585,7 @@ ptt_key = "space"
 base_url = "https://api.groq.com/openai/v1"
 transcription_model = "whisper-large-v3"
 cleanup_model = "openai/gpt-oss-20b"
-cleanup_fallback_model = "meta-llama/llama-4-scout-17b-16e-instruct"
+cleanup_fallback_model = "openai/gpt-oss-120b"
 output_mode = "stdout"
 mute_while_recording = true
 active_prompt = "default"

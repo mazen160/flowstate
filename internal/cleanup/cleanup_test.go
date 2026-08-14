@@ -15,7 +15,7 @@ import (
 
 const (
 	primaryModelID  = "openai/gpt-oss-20b"
-	fallbackModelID = "meta-llama/llama-4-scout-17b-16e-instruct"
+	fallbackModelID = "openai/gpt-oss-120b"
 )
 
 // capturedRequest records what the handler saw on a single call. Tests use
@@ -271,29 +271,33 @@ func TestClean_5xxNoFallback(t *testing.T) {
 	}
 }
 
-func TestClean_GPTOSS20BIncludesConditionalFields(t *testing.T) {
-	srv, getCalls := newTestServer(t, func(_ int, _ map[string]any) (int, []byte) {
-		return 200, chatPayload(t, "ok")
-	})
-	defer srv.Close()
+func TestClean_GPTOSSModelsIncludeConditionalFields(t *testing.T) {
+	for _, model := range []string{primaryModelID, fallbackModelID} {
+		t.Run(model, func(t *testing.T) {
+			srv, getCalls := newTestServer(t, func(_ int, _ map[string]any) (int, []byte) {
+				return 200, chatPayload(t, "ok")
+			})
+			defer srv.Close()
 
-	c := newClient(srv, primaryModelID, "")
-	if _, err := c.Clean(context.Background(), "sys", "raw", ""); err != nil {
-		t.Fatalf("Clean: %v", err)
-	}
+			c := newClient(srv, model, "")
+			if _, err := c.Clean(context.Background(), "sys", "raw", ""); err != nil {
+				t.Fatalf("Clean: %v", err)
+			}
 
-	body := getCalls()[0].body
-	mct, ok := body["max_completion_tokens"]
-	if !ok {
-		t.Errorf("max_completion_tokens missing; body keys=%v", keys(body))
-	} else if asFloat(mct) != 4096 {
-		t.Errorf("max_completion_tokens = %v; want 4096", mct)
-	}
-	if re, ok := body["reasoning_effort"]; !ok || re != "low" {
-		t.Errorf("reasoning_effort = %v (ok=%v); want \"low\"", re, ok)
-	}
-	if ir, ok := body["include_reasoning"]; !ok || ir != false {
-		t.Errorf("include_reasoning = %v (ok=%v); want false", ir, ok)
+			body := getCalls()[0].body
+			mct, ok := body["max_completion_tokens"]
+			if !ok {
+				t.Errorf("max_completion_tokens missing; body keys=%v", keys(body))
+			} else if asFloat(mct) != 4096 {
+				t.Errorf("max_completion_tokens = %v; want 4096", mct)
+			}
+			if re, ok := body["reasoning_effort"]; !ok || re != "low" {
+				t.Errorf("reasoning_effort = %v (ok=%v); want \"low\"", re, ok)
+			}
+			if ir, ok := body["include_reasoning"]; !ok || ir != false {
+				t.Errorf("include_reasoning = %v (ok=%v); want false", ir, ok)
+			}
+		})
 	}
 }
 
@@ -303,7 +307,7 @@ func TestClean_OtherModelOmitsConditionalFields(t *testing.T) {
 	})
 	defer srv.Close()
 
-	c := newClient(srv, fallbackModelID, "")
+	c := newClient(srv, "qwen/qwen3.6-27b", "")
 	if _, err := c.Clean(context.Background(), "sys", "raw", ""); err != nil {
 		t.Fatalf("Clean: %v", err)
 	}
@@ -311,7 +315,7 @@ func TestClean_OtherModelOmitsConditionalFields(t *testing.T) {
 	body := getCalls()[0].body
 	for _, key := range []string{"max_completion_tokens", "reasoning_effort", "include_reasoning"} {
 		if _, ok := body[key]; ok {
-			t.Errorf("body has %q; should be absent for non-gpt-oss-20b model. body=%v", key, body)
+			t.Errorf("body has %q; should be absent for non-GPT-OSS model. body=%v", key, body)
 		}
 	}
 }
@@ -335,16 +339,12 @@ func TestClean_FallbackRebuildsModelFields(t *testing.T) {
 		t.Fatalf("calls = %d; want 2", len(calls))
 	}
 
-	// First request (gpt-oss-20b) must carry the conditional fields.
-	for _, key := range []string{"max_completion_tokens", "reasoning_effort", "include_reasoning"} {
-		if _, ok := calls[0].body[key]; !ok {
-			t.Errorf("primary call missing %q; body=%v", key, calls[0].body)
-		}
-	}
-	// Second request (llama-4-scout) must NOT carry them.
-	for _, key := range []string{"max_completion_tokens", "reasoning_effort", "include_reasoning"} {
-		if _, ok := calls[1].body[key]; ok {
-			t.Errorf("fallback call should omit %q; body=%v", key, calls[1].body)
+	// Both GPT OSS requests must carry the conditional fields.
+	for callIndex, call := range calls {
+		for _, key := range []string{"max_completion_tokens", "reasoning_effort", "include_reasoning"} {
+			if _, ok := call.body[key]; !ok {
+				t.Errorf("call %d missing %q; body=%v", callIndex, key, call.body)
+			}
 		}
 	}
 }

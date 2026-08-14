@@ -186,7 +186,7 @@ mute_while_recording = false
 base_url = "` + srv.URL + `"
 transcription_model = "whisper-large-v3"
 cleanup_model = "openai/gpt-oss-20b"
-cleanup_fallback_model = "meta-llama/llama-4-scout-17b-16e-instruct"
+cleanup_fallback_model = "openai/gpt-oss-120b"
 active_prompt = "default"
 
 [prompts]
@@ -427,7 +427,7 @@ ptt_key = "space"
 base_url = "` + upstream.URL + `"
 transcription_model = "whisper-large-v3"
 cleanup_model = "openai/gpt-oss-20b"
-cleanup_fallback_model = "meta-llama/llama-4-scout-17b-16e-instruct"
+cleanup_fallback_model = "openai/gpt-oss-120b"
 language = "en"
 output_language = ""
 input_device = ""
