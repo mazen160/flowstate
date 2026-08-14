@@ -54,7 +54,7 @@ func Defaults() Config {
 		BaseURL:                     "https://api.groq.com/openai/v1",
 		TranscriptionModel:          "whisper-large-v3",
 		CleanupModel:                "openai/gpt-oss-20b",
-		CleanupFallbackModel:        "llama-3.3-70b-versatile",
+		CleanupFallbackModel:        "openai/gpt-oss-120b",
 		Language:                    "en",
 		OutputLanguage:              "",
 		InputDevice:                 "",

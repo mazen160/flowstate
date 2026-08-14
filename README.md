@@ -564,7 +564,7 @@ The web subcommand reads the rest of its behavior (transcription model, cleanup 
 | `base_url`               | `"https://api.groq.com/openai/v1"`         | Provider root. Override only for a self-hosted OpenAI-compatible proxy.              |
 | `transcription_model`    | `"whisper-large-v3"`                       | Whisper model id passed to `/audio/transcriptions`.                                  |
 | `cleanup_model`          | `"openai/gpt-oss-20b"`                     | LLM model id passed to `/chat/completions` for cleanup.                              |
-| `cleanup_fallback_model` | `"meta-llama/llama-4-scout-17b-16e-instruct"` | Retried on HTTP 429 or empty primary response. Set equal to `cleanup_model` (or empty) to disable. |
+| `cleanup_fallback_model` | `"openai/gpt-oss-120b"`                    | Retried on HTTP 429 or empty primary response. Set equal to `cleanup_model` (or empty) to disable. |
 | `language`               | `"en"`                                     | ISO-639-1 language hint. Set `""` to auto-detect, or `"fr"`/`"es"`/`"de"`/etc.       |
 | `output_language`        | `""`                                       | Translation target for the cleanup pass. Empty = same as spoken. Non-empty adds an "Output ONLY in `<lang>`" directive to the cleanup system prompt. |
 | `input_device`           | `""`                                       | Microphone UID or name (CLI only). Empty = system default. List with `flowstate devices`. |

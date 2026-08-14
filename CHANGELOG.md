@@ -6,6 +6,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- Default `cleanup_fallback_model` updated from
+  `llama-3.3-70b-versatile` (decommissioned August 16, 2026) to
+  `openai/gpt-oss-120b`, Groq's recommended production replacement.
+
 ## [1.0.4] — 2026-06-25
 
 ### Fixed

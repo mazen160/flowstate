@@ -37,7 +37,7 @@ base_url = "https://api.groq.com/openai/v1"
 # Models.
 transcription_model    = "whisper-large-v3"
 cleanup_model          = "openai/gpt-oss-20b"
-cleanup_fallback_model = "llama-3.3-70b-versatile"
+cleanup_fallback_model = "openai/gpt-oss-120b"
 
 # ISO-639-1 language code that biases transcription. Defaults to "en" (English).
 # Set to "" to let Whisper auto-detect, or "fr", "es", "de", etc. for other languages.
