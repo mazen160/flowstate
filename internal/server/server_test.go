@@ -56,6 +56,7 @@ func newTestServer(t *testing.T, upstreamURL, token string) *Server {
 		Model:   "openai/gpt-oss-20b",
 	})
 	return New(Options{
+		StorageDir:   t.TempDir(),
 		ListenHost:   "127.0.0.1",
 		ListenPort:   0,
 		Token:        token,

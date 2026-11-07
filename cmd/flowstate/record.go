@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"flag"
@@ -15,6 +16,7 @@ import (
 	"github.com/mazen160/flowstate/internal/mute"
 	"github.com/mazen160/flowstate/internal/output"
 	"github.com/mazen160/flowstate/internal/prompts"
+	"github.com/mazen160/flowstate/internal/recording"
 	"github.com/mazen160/flowstate/internal/transcribe"
 	"github.com/mazen160/flowstate/internal/trigger"
 	"github.com/mazen160/flowstate/internal/ui"
@@ -204,6 +206,42 @@ func runRecord(ctx context.Context, args []string, stdin io.Reader, stdout, stde
 	// "proc" timing reflects what they waited through after the Enter
 	// keystroke (or auto-stop).
 	procStart := time.Now()
+	original, err := os.ReadFile(wavPath)
+	if err != nil {
+		reporter.Error("read recording: %v", err)
+		return 1
+	}
+	saved := recording.NewInMemory()
+	if cfg.SaveRecordings {
+		saved, err = recording.New(cfg.StorageDir, wavPath, original)
+		if err != nil {
+			reporter.Error("%v", err)
+			return 1
+		}
+	}
+	processed, err := saved.Prepare(wavPath, original, cfg.TrimSilence)
+	if err != nil {
+		reporter.Error("process audio: %v", err)
+		return 1
+	}
+	if saved.Dir != "" {
+		reporter.Step("Saved recording to " + saved.Dir)
+	}
+	if processed.Removed > 0 {
+		reporter.Step(fmt.Sprintf("Removed %.2fs of silence", processed.Removed.Seconds()))
+	}
+	if processed.Empty {
+		if err := saved.SaveRaw(""); err != nil {
+			reporter.Error("%v", err)
+			return 1
+		}
+		if err := saved.SaveCleaned(""); err != nil {
+			reporter.Error("%v", err)
+			return 1
+		}
+		reporter.Warning("(no speech detected)")
+		return 0
+	}
 
 	// 9. Transcribe. The transcribe client uses a 20 s default timeout
 	// internally; we wrap ctx so a future Ctrl+C in the caller bubbles
@@ -215,14 +253,22 @@ func runRecord(ctx context.Context, args []string, stdin io.Reader, stdout, stde
 		Model:    cfg.TranscriptionModel,
 		Language: cfg.Language,
 	})
-	raw, err := tx.Transcribe(ctx, wavPath)
+	raw, err := tx.TranscribeReader(ctx, bytes.NewReader(processed.Data), processed.Filename)
 	if err != nil {
 		reporter.Error("transcribe: %v", err)
+		return 1
+	}
+	if err := saved.SaveRaw(raw); err != nil {
+		reporter.Error("%v", err)
 		return 1
 	}
 	// 10. Empty transcript -> hallucination-filtered OR genuinely silent.
 	// Either way there's nothing to clean up; report and exit 0.
 	if raw == "" {
+		if err := saved.SaveCleaned(""); err != nil {
+			reporter.Error("%v", err)
+			return 1
+		}
 		reporter.Warning("(no speech detected)")
 		return 0
 	}
@@ -254,6 +300,10 @@ func runRecord(ctx context.Context, args []string, stdin io.Reader, stdout, stde
 	cleaned, err := cl.Clean(ctx, systemPrompt, raw, "")
 	if err != nil {
 		reporter.Error("cleanup: %v", err)
+		return 1
+	}
+	if err := saved.SaveCleaned(cleaned); err != nil {
+		reporter.Error("%v", err)
 		return 1
 	}
 	// 12. Empty cleaned text -> "EMPTY" sentinel from the LLM or genuine

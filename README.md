@@ -74,7 +74,7 @@ A terminal-native, pipe-friendly dictation tool. Press Enter to stop, or hold a 
 <td width="50%" valign="top">
 
 ### Web UI: `flowstate web`
-A local browser app for when you want a button to click instead of a key to press. Live waveform meter, toast notifications, tap-to-toggle or hold-to-talk. Per-browser session history (never persisted server-side), exports to JSON or Markdown. One command to start.
+A local browser app for when you want a button to click instead of a key to press. Live waveform meter, toast notifications, tap-to-toggle or hold-to-talk. Per-browser session history, exports to JSON or Markdown, and recording artifacts saved under `.flowstate/`. One command to start.
 
 </td>
 </tr>
@@ -308,14 +308,15 @@ That's the whole loop. The cleaned text lands wherever you've configured (stdout
 Run `flowstate web` and open `http://127.0.0.1:8585`. Here's what you get:
 
 - **Tap to toggle, or hold to talk.** A short tap (or `Space` / `Enter`) starts recording, another short tap stops. Press-and-hold (mouse, touch, *or* the Space key) for at least 320 ms to switch into release-to-send mode for that one recording.
-- **Two local pages.** Use **Transcribe** for the Groq-backed dictation flow, or **Mic Record** to save browser-local mic clips that you can replay later without sending them to the server.
+- **Two local pages.** Use **Transcribe** for the Groq-backed dictation flow, or **Mic Record** to save and replay mic clips without sending them to an AI provider. Both archive audio on the local server.
+- **Remove silent gaps.** Gaps longer than one second are removed before transcription or mic-clip playback. Turn this off in Settings to keep every pause. **Save recordings** is on by default and keeps the original audio too.
 - **Mic picker.** Choose any connected browser microphone from the recorder row, refresh the list after plugging in a new input, then use Mic Record to capture and replay test clips.
 - **Live waveform meter.** While you speak, the brand mark on the record button is replaced by 7 gradient bars driven by your real audio levels, same vocabulary as the CLI's mic meter.
 - **Latest result + history.** Transcriptions show up as cleaned text with Copy and Show-raw buttons. Mic recordings use the same Latest/History layout with an audio player for replay.
 - **Toasts for everything.** Copies (manual *and* auto), settings saves, session switches, and local-data clears all pop a small bottom-right confirmation so you never wonder if a click landed.
 - **Sessions.** Hit *New session* in the top bar to start a fresh stream. The session select in Settings switches between past sessions; *Export JSON* / *Export Markdown* dump the current page's session items to a file.
 - **Auto-copy** *(opt-in)*. Toggle in Settings to copy each cleaned transcript to the clipboard automatically the moment it finishes.
-- **Privacy by design.** Sessions, transcripts, Mic Record clips, and the optional API token live in your browser's `localStorage`, the server never persists them. Transcription audio bytes are streamed straight to Groq and never written to disk on the server side. *Clear local data* in Settings wipes everything in this browser.
+- **Local recording archive.** Original audio, processed audio, raw text, and AI-cleaned text are saved under `.flowstate/` on the computer running flowstate. Turn off **Save recordings** in Settings to skip the disk archive. Browser session history and the optional API token also live in `localStorage`. *Clear local data* wipes browser data and keeps archived files.
 
 Common knobs:
 
@@ -355,9 +356,12 @@ The web UI is a thin client over a minimal JSON API. You can call these directly
 | `GET`  | `/api/health`     | Liveness probe. Returns `{"ok": true, "version": "..."}`. |
 | `GET`  | `/api/info`       | `{"version": "...", "auth_required": true|false}`. The frontend reads this once on load to decide whether to show the token field. |
 | `GET`  | `/api/ping`       | Authenticated token check. Returns `{"ok": true}` when the supplied Bearer token is accepted. |
-| `POST` | `/api/transcribe` | Multipart upload. One field: `audio` (the recorded blob, any browser-supported codec). Returns `{"raw": "...", "cleaned": "...", "duration_ms": 1234}`. |
+| `POST` | `/api/transcribe` | Multipart `audio` upload. Returns `raw`, `cleaned`, `duration_ms`, `recording_dir`, and `removed_silence_ms`. |
+| `POST` | `/api/record` | Archive a mic clip without AI. Returns base64 `audio` for playback, `ext`, `recording_dir`, and `removed_silence_ms`. |
 
-Auth is a single Bearer token. When `--web-token` (or `FLOWSTATE_WEB_TOKEN`) is set, `/api/ping` and `/api/transcribe` require `Authorization: Bearer <token>`. `/api/health` and `/api/info` are intentionally **always public**. The frontend reads `/api/info` to discover whether auth is required, uses `/api/ping` to verify the token before saving it locally, and keeps `/api/health` reachable for liveness checks.
+Both upload endpoints accept `trim_silence=true` or `false` and `save_recordings=true` or `false` (defaults: config). Silence removal requires PCM16 WAV audio; the web UI decodes browser recordings locally and uploads the exact original separately as an optional `original` file when saving is enabled. For compressed uploads from scripts, set `trim_silence=false`. With saving disabled, processing continues in memory and `recording_dir` is empty. The 25 MiB request limit includes both files and multipart overhead. `/api/info` also reports the configured `trim_silence` and `save_recordings` defaults.
+
+Auth is a single Bearer token. When `--web-token` (or `FLOWSTATE_WEB_TOKEN`) is set, `/api/ping`, `/api/transcribe`, and `/api/record` require `Authorization: Bearer <token>`. `/api/health` and `/api/info` are intentionally **always public**. The frontend reads `/api/info` to discover whether auth is required, uses `/api/ping` to verify the token before saving it locally, and keeps `/api/health` reachable for liveness checks.
 
 ```sh
 # Health check (always works, no token)
@@ -374,20 +378,25 @@ curl http://127.0.0.1:8585/api/ping \
 # Transcribe a clip
 curl -X POST http://127.0.0.1:8585/api/transcribe \
      -H "Authorization: Bearer $FLOWSTATE_WEB_TOKEN" \
-     -F "audio=@clip.webm"
+     -F "audio=@clip.wav"
+
+# Keep a compressed clip unchanged
+curl -X POST http://127.0.0.1:8585/api/transcribe \
+     -H "Authorization: Bearer $FLOWSTATE_WEB_TOKEN" \
+     -F "audio=@clip.webm" -F "trim_silence=false"
 ```
 
-`POST /api/transcribe` is rate-limited to **30 requests per minute per source IP**, far above interactive use, low enough to bound runaway Groq spend if the API is exposed on a LAN. The response carries `Retry-After: 60` when the limit fires.
+`POST /api/transcribe` and `/api/record` share a limit of **30 requests per minute per source IP**. The response carries `Retry-After: 60` when the limit fires.
 
 Every non-success response shares the shape `{"error": "<friendly message>"}`. Status codes for `/api/transcribe`:
 
 | Code | Meaning |
 |---|---|
 | `200` | Success. Both `raw` and `cleaned` may be empty (silent / hallucination filter). |
-| `400` | Request was not multipart, or the multipart parse failed. |
+| `400` | Invalid multipart form, invalid `trim_silence`, or unsupported audio for silence removal. |
 | `401` | Token required but missing or wrong. |
 | `405` | Non-`POST` to `/api/transcribe`. |
-| `413` | Upload exceeded 25 MiB (Groq's transcription cap). |
+| `413` | Total multipart upload exceeded 25 MiB. |
 | `415` | `audio` field missing from the multipart body. |
 | `429` | Too many requests from this source IP within the last 60 seconds. Honor `Retry-After`. |
 | `500` | Groq returned an error. The body's `error` field carries the friendly message when it's a documented upstream failure (auth, quota, payload size); for transport-level errors the body is the generic `"upstream request failed; check the server log for details"` and the full error is logged to the server's stderr. |
@@ -500,6 +509,22 @@ flowstate is the one that's all of: cross-platform, terminal-native, **with a se
 
 ## Configuration
 
+By default, every recording gets a unique folder under `.flowstate/`, relative to the directory where you launch flowstate:
+
+```text
+.flowstate/<timestamp>-<unique-id>/
+  original.wav    # exact original audio (.webm/.ogg/.mp4 for browser captures)
+  modified.wav    # audio after silence removal
+  raw.txt         # transcription before AI cleanup
+  cleaned.txt     # text after AI cleanup
+```
+
+Text files are written as their stages finish, so audio and raw text remain available if an API call fails. Mic Record saves the two audio files without running transcription. With trimming off, `modified` keeps the original audio format. Files use private permissions (0600 files / 0700 directories on Unix); `.flowstate/` is gitignored. Delete archived folders manually when you no longer need them.
+
+**Save recordings** is enabled by default. Turn it off in web Settings, set `save_recordings = false` in config, or pass `--save-recordings=false` to the CLI to skip the disk archive while keeping trimming and transcription working. The browser remembers its own preference. Browser history and previously archived files are kept separately.
+
+Silence removal is on by default. It removes continuous gaps **strictly longer than 1 second** where every sample stays at or below about **−60 dBFS**. Short pauses and louder audio remain. Use `--trim-silence=false`, `trim_silence = false` in config, or **Remove silent gaps** in web Settings to disable it. Browser preference overrides the server default. No external audio tools are required.
+
 flowstate's CLI and web UI both read the same TOML config and the same `GROQ_API_KEY` environment variable. Tune one place; both interfaces follow.
 
 <details>
@@ -534,6 +559,9 @@ a friendly message naming both env vars if neither is set.
 | `--max-time <secs>` | `0` | Auto-stop recording after N seconds and process. |
 | `--paste-delay <secs>` | `0` | Wait N seconds between clipboard seed and paste keystroke. |
 | `--silent` | (off) | Suppress all stderr (status, warnings, errors). Only the cleaned transcript prints to stdout; use the exit code to detect failure. |
+| `--trim-silence=false` | on | Keep silent gaps. |
+| `--save-recordings=false` | on | Skip saving recording artifacts to disk. |
+| `--storage-dir <path>` | `.flowstate` | Store recording artifacts here. |
 
 All flags override the matching config field for one invocation only. Unset flags leave the on-disk config untouched.
 
@@ -549,6 +577,7 @@ All flags override the matching config field for one invocation only. Unset flag
 | `--web-port <port>` | `8585` | TCP port to listen on. |
 | `--web-token <token>` | `""` | Optional Bearer token for `/api/*`. Falls back to `FLOWSTATE_WEB_TOKEN`. Empty means auth-disabled. |
 | `--no-browser` | (auto-opens) | Don't open a browser tab on startup. By default `flowstate web` opens the UI in your default browser once the listener is ready. |
+| `--storage-dir <path>` | `.flowstate` | Store recording artifacts here. |
 
 The web subcommand reads the rest of its behavior (transcription model, cleanup model, language, custom vocabulary, output language, prompts) from the same config file the CLI uses.
 
@@ -569,6 +598,9 @@ The web subcommand reads the rest of its behavior (transcription model, cleanup 
 | `output_language`        | `""`                                       | Translation target for the cleanup pass. Empty = same as spoken. Non-empty adds an "Output ONLY in `<lang>`" directive to the cleanup system prompt. |
 | `input_device`           | `""`                                       | Microphone UID or name (CLI only). Empty = system default. List with `flowstate devices`. |
 | `mute_while_recording`   | `true`                                     | Mutes system audio output during the recording so playback doesn't bleed in (CLI only). |
+| `trim_silence`           | `true`                                     | Remove silent gaps longer than one second; applies to CLI and web. |
+| `save_recordings`        | `true`                                     | Save audio and text stages to disk; applies to CLI and web. Browser Settings can override the web default. |
+| `storage_dir`            | `".flowstate"`                             | Recording archive directory, relative to the process working directory. |
 | `output_mode`            | `"stdout,clipboard"`                       | Comma list of `stdout`, `clipboard`, `paste`, or the literal `"all"` (CLI only).     |
 | `preserve_clipboard_after_paste` | `true`                              | When `paste` is enabled, snapshot the current clipboard before pasting and restore it ~500ms later, unless you copied something else in the meantime. |
 | `active_prompt`          | `"default"`                                | Which key under `[prompts]` to use as the system prompt for cleanup.                 |
@@ -732,7 +764,7 @@ What's shipped, and what's intentionally left out:
 - ✅ Custom vocabulary for domain spellings.
 - 🟡 Streaming transcription.
 - 🟡 Edit-mode subcommand for "rewrite this highlighted text by voice".
-- 🟡 Local trimming of silent gaps before the audio is sent to Groq.
+- ✅ Local trimming of silent gaps longer than one second, with original and processed recordings saved on disk.
 - 🟡 Background daemon for the CLI. Today a CLI invocation is one recording, and the web server covers the long-running case. A future daemon could bind global shortcut keys to start a recording without launching the web UI.
 - ❌ Menu bar / system tray native app, flowstate intentionally stays a single binary; the web UI covers the "I want a button to click" use case.
 - ❌ Offline / local transcription, flowstate calls Groq.

@@ -106,6 +106,9 @@ func TestInit_WritesFileWithPrompts(t *testing.T) {
 	if cfg.CleanupFallbackModel != "openai/gpt-oss-120b" {
 		t.Errorf("CleanupFallbackModel = %q; want %q", cfg.CleanupFallbackModel, "openai/gpt-oss-120b")
 	}
+	if !cfg.TrimSilence || !cfg.SaveRecordings || cfg.StorageDir != ".flowstate" {
+		t.Errorf("recording defaults: trim=%v save=%v storage=%q", cfg.TrimSilence, cfg.SaveRecordings, cfg.StorageDir)
+	}
 }
 
 // TestInit_RefusesExisting verifies the no-clobber default behavior.

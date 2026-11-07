@@ -6,6 +6,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.0.5] — 2026-11-07
+
+### Added
+- Remove silent gaps longer than one second before transcription and Mic
+  Record playback. Enabled by default; configurable with `trim_silence`,
+  `--trim-silence=false` (CLI), or **Remove silent gaps** in web Settings.
+- Save each recording under `.flowstate/` with its original audio, modified
+  audio, raw transcript, and AI-cleaned text. `storage_dir` or `--storage-dir`
+  changes the destination. Audio and completed text stages survive API errors.
+- **Save recordings** setting, enabled by default. Disable it in web Settings,
+  with `save_recordings = false`, or with `--save-recordings=false` in the CLI
+  to keep processing without saving recording artifacts to disk.
+- Authenticated `/api/record` endpoint for archiving mic clips without an
+  AI request. Web Mic Record now saves to the server as well as browser history.
+
+### Changed
+- Web recordings use browser audio decoding for silence removal, preserving
+  the exact MediaRecorder original alongside the processed WAV. No additional
+  audio tools are required. Clearing browser data keeps archived files.
+
 ### Fixed
 - Default `cleanup_fallback_model` updated from
   `llama-3.3-70b-versatile` (decommissioned August 16, 2026) to

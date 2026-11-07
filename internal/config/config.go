@@ -30,6 +30,9 @@ type Config struct {
 	OutputLanguage              string            `toml:"output_language"`
 	InputDevice                 string            `toml:"input_device"`
 	MuteWhileRecording          bool              `toml:"mute_while_recording"`
+	TrimSilence                 bool              `toml:"trim_silence"`
+	SaveRecordings              bool              `toml:"save_recordings"`
+	StorageDir                  string            `toml:"storage_dir"`
 	OutputMode                  string            `toml:"output_mode"`
 	PreserveClipboardAfterPaste bool              `toml:"preserve_clipboard_after_paste"`
 	ActivePrompt                string            `toml:"active_prompt"`
@@ -59,6 +62,9 @@ func Defaults() Config {
 		OutputLanguage:              "",
 		InputDevice:                 "",
 		MuteWhileRecording:          true,
+		TrimSilence:                 true,
+		SaveRecordings:              true,
+		StorageDir:                  ".flowstate",
 		OutputMode:                  "stdout,clipboard",
 		PreserveClipboardAfterPaste: true,
 		ActivePrompt:                "default",

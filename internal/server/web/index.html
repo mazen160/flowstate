@@ -91,7 +91,7 @@
     <div class="auth-copy">
       <span class="section-label">Authentication</span>
       <h2 id="auth-title">Token required</h2>
-      <p>This server was started with a web token. Save it once for this browser to enable transcription.</p>
+      <p>This server was started with a web token. Save it once for this browser to enable recording.</p>
     </div>
     <form id="auth-form" class="auth-form">
       <label class="field auth-token-field">
@@ -214,6 +214,20 @@
         <select id="session-select"></select>
       </label>
     </div>
+    <label class="toggle-row" for="trim-silence">
+      <input id="trim-silence" type="checkbox" checked aria-describedby="trim-silence-help">
+      <span class="toggle-text">
+        <span class="toggle-title">Remove silent gaps</span>
+        <span id="trim-silence-help" class="toggle-desc">Remove silence longer than 1 second from transcriptions and mic clips.</span>
+      </span>
+    </label>
+    <label class="toggle-row" for="save-recordings">
+      <input id="save-recordings" type="checkbox" checked aria-describedby="save-recordings-help">
+      <span class="toggle-text">
+        <span class="toggle-title">Save recordings</span>
+        <span id="save-recordings-help" class="toggle-desc">Keep original and processed audio, raw text, and AI-cleaned text in the recording folder. Browser history is saved separately.</span>
+      </span>
+    </label>
     <label id="auto-copy-row" class="toggle-row" for="auto-copy">
       <input id="auto-copy" type="checkbox">
       <span class="toggle-text">
@@ -225,8 +239,8 @@
       <div class="settings-danger-text">
         <span class="field-label">Local data</span>
         <p class="settings-danger-desc">
-          Sessions, transcripts, mic recordings, and the saved API token live in
-          this browser's localStorage. Clearing wipes everything; the server is untouched.
+          Clear this browser's history, mic clips, settings, and saved API token.
+          Original audio, processed audio, and transcripts saved on the server are kept.
         </p>
       </div>
       <button id="clear-storage" class="btn btn-danger" type="button">Clear local data</button>

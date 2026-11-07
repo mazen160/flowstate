@@ -451,7 +451,7 @@ literal = "test-literal"
 	out, code := runBinary(t, bin, []string{
 		"GROQ_API_KEY=test-key",
 		"NO_COLOR=1",
-	}, "--config", cfgPath, "--wav-source", wavPath)
+	}, "--config", cfgPath, "--wav-source", wavPath, "--storage-dir", filepath.Join(tmpDir, ".flowstate"))
 
 	if code != 0 {
 		t.Fatalf("flowstate full-pipeline exit code = %d, want 0\noutput:\n%s", code, out)

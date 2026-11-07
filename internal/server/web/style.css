@@ -969,6 +969,7 @@ kbd {
   color: var(--text-3);
   line-height: 1.5;
 }
+#trim-silence-help, #save-recordings-help { color: var(--text-2); }
 
 .version-line {
   margin: 16px 0 0;

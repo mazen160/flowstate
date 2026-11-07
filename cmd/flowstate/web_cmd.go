@@ -39,6 +39,7 @@ func runWeb(ctx context.Context, args []string, stderr io.Writer) int {
 		token      string
 		configPath string
 		noBrowser  bool
+		storageDir string
 	)
 	fs.StringVar(&listenHost, "web-interface-listen", "127.0.0.1",
 		"Interface to bind (default 127.0.0.1).")
@@ -50,6 +51,7 @@ func runWeb(ctx context.Context, args []string, stderr io.Writer) int {
 		"Path to config file (overrides $FLOWSTATE_CONFIG).")
 	fs.BoolVar(&noBrowser, "no-browser", false,
 		"Don't open a browser tab on startup. Default is to open the UI automatically.")
+	fs.StringVar(&storageDir, "storage-dir", "", "Directory for recording artifacts (default .flowstate).")
 
 	if err := fs.Parse(args); err != nil {
 		if errors.Is(err, flag.ErrHelp) {
@@ -70,6 +72,9 @@ func runWeb(ctx context.Context, args []string, stderr io.Writer) int {
 	if err != nil {
 		fmt.Fprintf(stderr, "load config: %v\n", err)
 		return 1
+	}
+	if storageDir != "" {
+		cfg.StorageDir = storageDir
 	}
 
 	// 2. Surface any soft warnings the config layer collected (unknown
@@ -131,6 +136,9 @@ func runWeb(ctx context.Context, args []string, stderr io.Writer) int {
 	// 8. Build the server. ListenAndServe blocks until ctx is cancelled
 	//    and returns nil on a clean shutdown.
 	srv := server.New(server.Options{
+		StorageDir:     cfg.StorageDir,
+		DisableStorage: !cfg.SaveRecordings,
+		TrimSilence:    cfg.TrimSilence,
 		ListenHost:     listenHost,
 		ListenPort:     listenPort,
 		Token:          token,

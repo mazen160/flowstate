@@ -13,18 +13,21 @@ import (
 // passed --foo with an empty string". applyFlags below uses that distinction
 // to decide whether to overwrite the config field.
 type recordFlags struct {
-	configPath string
-	prompt     string
-	output     string
-	device     string
-	trigger    string
-	pttKey     string
-	model      string
-	noMute     bool
-	noColor    bool
-	maxTime    int
-	pasteDelay int
-	silent     bool
+	configPath     string
+	prompt         string
+	output         string
+	device         string
+	trigger        string
+	pttKey         string
+	model          string
+	noMute         bool
+	noColor        bool
+	maxTime        int
+	pasteDelay     int
+	silent         bool
+	trimSilence    bool
+	saveRecordings bool
+	storageDir     string
 
 	// wavSource is a HIDDEN test affordance. When set to a non-empty path,
 	// runRecord skips the audio capture step entirely and uses that WAV
@@ -62,6 +65,9 @@ func newRecordFlagSet(stderr io.Writer) (*flag.FlagSet, *recordFlags) {
 	fs.IntVar(&rf.maxTime, "max-time", 0, "Auto-stop recording after N seconds and process. 0 disables (default).")
 	fs.IntVar(&rf.pasteDelay, "paste-delay", 0, "Wait N seconds between clipboard seed and paste keystroke. 0 = immediate (default).")
 	fs.BoolVar(&rf.silent, "silent", false, "Suppress all stderr output. Only the cleaned transcript prints (to stdout); errors are silent — check the exit code instead.")
+	fs.BoolVar(&rf.trimSilence, "trim-silence", true, "Remove silent gaps longer than one second. Use --trim-silence=false to disable.")
+	fs.BoolVar(&rf.saveRecordings, "save-recordings", true, "Save recording artifacts to disk. Use --save-recordings=false to disable.")
+	fs.StringVar(&rf.storageDir, "storage-dir", "", "Directory for original/modified audio and raw/AI-cleaned text (default .flowstate).")
 	// --wav-source is a hidden test affordance. Registered with the
 	// flag set so Parse accepts it, but absent from helpText so users
 	// don't accidentally discover it. The fact-finding test under
@@ -86,6 +92,15 @@ func (rf *recordFlags) captureSetFlags(fs *flag.FlagSet) {
 // value) is what flips the field, so we check `set["no-mute"]` rather than
 // rf.noMute directly.
 func applyFlags(cfg *config.Config, rf *recordFlags) {
+	if rf.set["save-recordings"] {
+		cfg.SaveRecordings = rf.saveRecordings
+	}
+	if rf.set["trim-silence"] {
+		cfg.TrimSilence = rf.trimSilence
+	}
+	if rf.set["storage-dir"] {
+		cfg.StorageDir = rf.storageDir
+	}
 	if rf.set["prompt"] {
 		cfg.ActivePrompt = rf.prompt
 	}

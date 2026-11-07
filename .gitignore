@@ -15,6 +15,7 @@ coverage.out
 
 # Local agent / workspace state (not source)
 .claude/
+.flowstate/
 .backlog/
 docs/LAUNCH.md
 docs/RELEASING.md

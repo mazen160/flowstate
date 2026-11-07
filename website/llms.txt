@@ -31,9 +31,12 @@ project is free and MIT licensed; the only cost is Groq usage.
 
 ## Privacy
 
-The CLI writes only to the destinations you choose. The web server never
-persists audio or transcripts; history lives in the browser's localStorage and
-audio streams straight to Groq without touching disk on the server.
+The CLI and local web server save original audio, processed audio, raw
+transcripts, and AI-cleaned text under .flowstate/ on the computer running
+flowstate by default. Disable Save recordings in web Settings or set
+save_recordings = false to skip the disk archive. Silence longer than one second
+is removed by default. Browser history also lives in localStorage. Clearing
+browser data keeps archived files. The Groq API key stays in the environment.
 
 ## How it compares
 

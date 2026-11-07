@@ -1,7 +1,7 @@
 // Package server implements the `flowstate web` HTTP server: a single-page
 // vanilla-JS UI plus a thin JSON API that re-uses the existing transcribe +
-// cleanup pipeline from the CLI. No transcripts are persisted on the
-// server side — the browser owns history via localStorage.
+// cleanup pipeline from the CLI. Recording artifacts are archived on disk;
+// the browser keeps its session history in localStorage.
 //
 // The package is structured for testability and minimal API surface:
 //
@@ -45,6 +45,13 @@ const maxUploadBytes = 25 * 1024 * 1024
 // validation is light: the only field that can fail loudly later is
 // ListenPort (out-of-range will surface when the listener binds).
 type Options struct {
+	// StorageDir contains a private directory per recording. Empty uses .flowstate.
+	StorageDir string
+	// DisableStorage turns off the recording archive by default. Each upload
+	// can override this default with save_recordings=true or false.
+	DisableStorage bool
+	// TrimSilence removes silent gaps longer than one second from PCM16 WAVs.
+	TrimSilence bool
 	// ListenHost is the interface to bind. Typically "127.0.0.1"; the
 	// caller is responsible for printing a non-loopback warning when
 	// appropriate.
@@ -181,6 +188,8 @@ func (s *Server) registerRoutes(mux *http.ServeMux) {
 	// Token is empty) and per-IP rate limiting (always on).
 	mux.Handle("/api/transcribe",
 		s.authMiddleware(s.rateLimitMiddleware(http.HandlerFunc(s.handleTranscribe))))
+	mux.Handle("/api/record",
+		s.authMiddleware(s.rateLimitMiddleware(http.HandlerFunc(s.handleRecord))))
 }
 
 // Addr returns the host:port string the server is bound to. Before the

@@ -28,7 +28,7 @@ import (
 // Untagged `make build` from a clean tree reads the latest tag via
 // `git describe --tags`, so this constant only surfaces in builds made
 // without the Makefile.
-var version = "1.0.3"
+var version = "1.0.5"
 
 // helpText is what `flowstate --help` (and `flowstate -h`) prints. Short by
 // design: details live in the man-page-style README, not in --help.
@@ -44,6 +44,9 @@ Usage:
   flowstate --help                   Show this help.
 
 Record flags:
+  --trim-silence=false     Keep silent gaps (default: remove gaps over 1s).
+  --storage-dir <path>     Save recording artifacts (default .flowstate).
+  --save-recordings=false  Skip saving recording artifacts to disk.
   --config <path>          Override the config file path.
   --prompt <name>          Override active_prompt.
   --output <list>          Override output_mode (comma list or "all").
@@ -64,6 +67,7 @@ Record flags:
                            use the exit code to detect failure.
 
 Web flags (use with: flowstate web):
+  --storage-dir <path>           Save recording artifacts (default .flowstate).
   --web-interface-listen <host>  Interface to bind (default 127.0.0.1).
   --web-port <port>              TCP port to listen on (default 8585).
   --web-token <token>            Optional Bearer auth token. Empty = no auth.

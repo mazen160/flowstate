@@ -1,7 +1,7 @@
 /* flowstate web — vanilla JS frontend.
  *
- * No build step, no framework, no CDN. All state lives in localStorage so
- * the server never persists transcripts or Mic Record clips:
+ * No build step, no framework, no CDN. Browser history lives in localStorage;
+ * original/processed audio and transcription stages are also saved on disk:
  *
  *   flowstate.sessions          [{id, startedAt, items: [...]}, ...]
  *   flowstate.currentSessionId  string
@@ -22,6 +22,8 @@
     micDeviceId: '',
     token: '',
     autoCopy: false,
+    trimSilence: true,
+    saveRecordings: true,
     authRequired: false,
     authChecked: false
   };
@@ -117,6 +119,8 @@
     // "1" / "0" rather than JSON so this single-bit setting reads cleanly
     // in the browser's storage inspector.
     S.autoCopy = localStorage.getItem('flowstate.autoCopy') === '1';
+    S.trimSilence = localStorage.getItem('flowstate.trimSilence') !== '0';
+    S.saveRecordings = localStorage.getItem('flowstate.saveRecordings') !== '0';
     if (!Array.isArray(S.sessions)) S.sessions = [];
   }
 
@@ -518,10 +522,7 @@
       return { message: 'Token has unsaved changes.', variant: 'info' };
     }
     if (S.authRequired && !S.token) {
-      if (S.view === 'mic') {
-        return { message: 'Token required for transcription. Mic Record works locally.', variant: 'warn' };
-      }
-      return { message: 'Enter the web token to enable transcription.', variant: 'warn' };
+      return { message: 'Enter the web token to enable recording.', variant: 'warn' };
     }
     if (S.authRequired && S.token) {
       return { message: 'Token saved in this browser.', variant: 'success' };
@@ -530,7 +531,7 @@
   }
 
   function isAuthBlocked() {
-    return S.view === 'transcribe' && S.authRequired && !S.token;
+    return S.authRequired && !S.token;
   }
 
   function openAuthPanel(focusInput) {
@@ -560,7 +561,7 @@
     var hint = $('rec-hint');
     if (hint) {
       if (!DEFAULT_REC_HINT) DEFAULT_REC_HINT = hint.innerHTML;
-      if (blocked) hint.textContent = 'Save the server token to enable transcription.';
+      if (blocked) hint.textContent = 'Save the server token to enable recording.';
       else hint.innerHTML = currentView().hintHTML;
     }
 
@@ -632,12 +633,12 @@
       input.value = '';
       setTokenDraft('', input);
       setAuthStatus(
-        S.authRequired ? 'Token cleared. Enter a token to enable transcription.' : 'Token cleared.',
+        S.authRequired ? 'Token cleared. Enter a token to enable recording.' : 'Token cleared.',
         S.authRequired ? 'warn' : 'info'
       );
       if (isAuthBlocked()) openAuthPanel(true);
       showToast('API token cleared', {
-        desc: S.authRequired ? 'Transcription is locked until a valid token is saved.' : 'No token is stored locally.',
+        desc: S.authRequired ? 'Recording is locked until a valid token is saved.' : 'No token is stored locally.',
         variant: 'info',
         icon: '✓'
       });
@@ -1342,13 +1343,66 @@
     } catch (e) { /* already stopped */ }
   }
 
-  function blobToDataURL(blob) {
-    return new Promise(function (resolve, reject) {
-      var reader = new FileReader();
-      reader.onload = function () { resolve(String(reader.result || '')); };
-      reader.onerror = function () { reject(reader.error || new Error('read failed')); };
-      reader.readAsDataURL(blob);
-    });
+  // Decode locally with Web Audio so silence removal needs no external
+  // codecs on the server. Preserve the exact MediaRecorder blob separately.
+  async function recordingForm(blob, ext) {
+    var fd = new FormData();
+    fd.append('trim_silence', S.trimSilence ? 'true' : 'false');
+    fd.append('save_recordings', S.saveRecordings ? 'true' : 'false');
+    if (S.trimSilence) {
+      try {
+        var OfflineContext = window.OfflineAudioContext || window.webkitOfflineAudioContext;
+        var ctx = new OfflineContext(1, 1, 16000);
+        var decoded = await ctx.decodeAudioData(await blob.arrayBuffer());
+        var wav = encodeWAV(decoded);
+        if (S.saveRecordings) fd.append('original', blob, 'recording.' + ext);
+        fd.append('audio', wav, 'recording.wav');
+      } catch (e) {
+        // A codec the browser can record may still fail to decode. Save
+        // and process the original rather than losing a captured clip.
+        fd.set('trim_silence', 'false');
+        fd.append('audio', blob, 'recording.' + ext);
+        showToast('Silence removal unavailable', {
+          desc: 'This clip will keep its pauses.',
+          variant: 'warn',
+          icon: '!'
+        });
+      }
+    } else {
+      fd.append('audio', blob, 'recording.' + ext);
+    }
+    return fd;
+  }
+
+  function encodeWAV(buffer) {
+    var frames = buffer.length;
+    var data = new ArrayBuffer(44 + frames * 2);
+    var view = new DataView(data);
+    function tag(offset, value) {
+      for (var i = 0; i < value.length; i++) view.setUint8(offset + i, value.charCodeAt(i));
+    }
+    tag(0, 'RIFF');
+    view.setUint32(4, 36 + frames * 2, true);
+    tag(8, 'WAVE');
+    tag(12, 'fmt ');
+    view.setUint32(16, 16, true);
+    view.setUint16(20, 1, true);
+    view.setUint16(22, 1, true);
+    view.setUint32(24, buffer.sampleRate, true);
+    view.setUint32(28, buffer.sampleRate * 2, true);
+    view.setUint16(32, 2, true);
+    view.setUint16(34, 16, true);
+    tag(36, 'data');
+    view.setUint32(40, frames * 2, true);
+    var channels = [];
+    for (var c = 0; c < buffer.numberOfChannels; c++) channels.push(buffer.getChannelData(c));
+    for (var f = 0; f < frames; f++) {
+      var sample = 0;
+      for (var ch = 0; ch < channels.length; ch++) sample += channels[ch][f];
+      sample = Math.max(-1, Math.min(1, sample / channels.length));
+      view.setInt16(44 + f * 2, Math.round(sample * (sample < 0 ? 32768 : 32767)), true);
+    }
+    return new Blob([data], { type: 'audio/wav' });
   }
 
   async function finishRecording(blob, ext, mime, mode, durationMs) {
@@ -1359,6 +1413,25 @@
     await upload(blob, ext);
   }
 
+  function recordingTokenRejected() {
+    var rejected = S.token;
+    S.authRequired = true;
+    S.authChecked = true;
+    S.token = '';
+    persist();
+    if (rejected) setTokenDraft(rejected);
+    setRecState('idle');
+    setStatus('Authentication required. Save the token, then record again.');
+    setAuthStatus('The server rejected the saved token. Paste the current web token.', 'error');
+    openAuthPanel(true);
+    showToast('Authentication required', {
+      desc: 'Save the web token before recording.',
+      variant: 'warn',
+      icon: '!',
+      duration: 6000
+    });
+  }
+
   async function saveClip(blob, ext, mime, durationMs) {
     if (blob.size === 0) {
       setRecState('idle');
@@ -1366,7 +1439,19 @@
       return;
     }
     try {
-      var dataURL = await blobToDataURL(blob);
+      var fd = await recordingForm(blob, ext);
+      var headers = {};
+      if (S.token) headers['Authorization'] = 'Bearer ' + S.token;
+      var resp = await fetch('/api/record', { method: 'POST', body: fd, headers: headers });
+      if (resp.status === 401) {
+        recordingTokenRejected();
+        return;
+      }
+      var data = await safeJSON(resp);
+      if (!resp.ok) throw new Error(data && data.error ? data.error : resp.statusText);
+      var processedExt = data.ext || ext;
+      var processedMime = processedExt === 'wav' ? 'audio/wav' : mime;
+      var dataURL = 'data:' + processedMime + ';base64,' + data.audio;
       var session = currentSession() || createSession();
       var item = {
         id: newSessionId(),
@@ -1375,19 +1460,25 @@
         title: 'Mic recording',
         micLabel: selectedMicLabel(),
         micDeviceId: S.micDeviceId || '',
-        mime: mime || blob.type || 'audio/webm',
-        ext: ext || 'webm',
-        size: blob.size,
-        durationMs: durationMs || 0,
+        mime: processedMime,
+        ext: processedExt,
+        size: Math.floor(data.audio.length * 3 / 4) - (data.audio.endsWith('==') ? 2 : data.audio.endsWith('=') ? 1 : 0),
+        durationMs: Math.max(0, (durationMs || 0) - (data.removed_silence_ms || 0)),
+        recordingDir: data.recording_dir,
+        removedSilenceMs: data.removed_silence_ms || 0,
         dataURL: dataURL
       };
       session.items.push(item);
       if (!persist()) {
         session.items.pop();
         setRecState('idle');
-        setStatus('Recording is too large for browser storage.');
-        showToast('Recording not saved', {
-          desc: 'Browser localStorage is full. Try a shorter clip or clear local data.',
+        setStatus(item.recordingDir
+          ? 'Recording saved to ' + item.recordingDir + '. Browser history is full.'
+          : 'Browser history is full. This recording could not be saved.');
+        showToast(item.recordingDir ? 'Recording saved on the server' : 'Recording not saved', {
+          desc: item.recordingDir
+            ? 'Browser storage is full. Clear local data to make room for new history.'
+            : 'Clear local data to make room, or turn on Save recordings to keep files on disk.',
           variant: 'warn',
           icon: '!',
           duration: 6000
@@ -1398,7 +1489,8 @@
       setRecState('idle');
       setStatus('');
       showToast('Recording saved', {
-        desc: formatDuration(item.durationMs) + ' · ' + formatBytes(item.size),
+        desc: formatDuration(item.durationMs) + ' · ' + formatBytes(item.size) +
+          (item.removedSilenceMs ? ' · removed ' + formatDuration(item.removedSilenceMs) + ' of silence' : ''),
         variant: 'success',
         icon: '✓'
       });
@@ -1415,34 +1507,14 @@
       return;
     }
     var session = currentSession() || createSession();
-    var send = async function () {
-      var fd = new FormData();
-      fd.append('audio', blob, 'recording.' + ext);
+    try {
+      var fd = await recordingForm(blob, ext);
       fd.append('session_id', session.id);
       var headers = {};
       if (S.token) headers['Authorization'] = 'Bearer ' + S.token;
       var resp = await fetch('/api/transcribe', { method: 'POST', body: fd, headers: headers });
-      return resp;
-    };
-    try {
-      var resp = await send();
       if (resp.status === 401) {
-        var rejected = S.token;
-        S.authRequired = true;
-        S.authChecked = true;
-        S.token = '';
-        persist();
-        if (rejected) setTokenDraft(rejected);
-        setRecState('idle');
-        setStatus('Authentication required. Save the token, then transcribe again.');
-        setAuthStatus('The server rejected the saved token. Paste the current web token.', 'error');
-        openAuthPanel(true);
-        showToast('Authentication required', {
-          desc: 'Save the web token before transcription.',
-          variant: 'warn',
-          icon: '!',
-          duration: 6000
-        });
+        recordingTokenRejected();
         return;
       }
       if (!resp.ok) {
@@ -1461,7 +1533,9 @@
         cleaned: data.cleaned || '',
         micLabel: selectedMicLabel(),
         micDeviceId: S.micDeviceId || '',
-        durationMs: data.duration_ms || 0
+        durationMs: data.duration_ms || 0,
+        recordingDir: data.recording_dir,
+        removedSilenceMs: data.removed_silence_ms || 0
       };
       if (!item.raw && !item.cleaned) {
         setRecState('idle');
@@ -1473,6 +1547,14 @@
       rerender();
       setRecState('idle');
       setStatus('');
+      if (item.removedSilenceMs) {
+        showToast('Silent gaps removed', {
+          desc: formatDuration(item.removedSilenceMs) + ' removed.' +
+            (item.recordingDir ? ' Original audio saved too.' : ''),
+          variant: 'success',
+          icon: '✓'
+        });
+      }
       // Auto-copy the cleaned text if the user opted in. Uses the same
       // clipboard path as the manual Copy buttons (Promise → fallback)
       // and flashes a small status hint instead of taking over a button,
@@ -1587,7 +1669,7 @@
 
   function pressRecord() {
     if (isAuthBlocked()) {
-      setAuthStatus('Enter the web token to enable transcription.', 'warn');
+      setAuthStatus('Enter the web token to enable recording.', 'warn');
       openAuthPanel(true);
       return;
     }
@@ -1765,6 +1847,24 @@
         });
       });
     }
+    var trimSilenceBox = $('trim-silence');
+    if (trimSilenceBox) {
+      trimSilenceBox.checked = S.trimSilence;
+      trimSilenceBox.addEventListener('change', function () {
+        S.trimSilence = this.checked;
+        try { localStorage.setItem('flowstate.trimSilence', S.trimSilence ? '1' : '0'); }
+        catch (e) { /* preference still applies to the current page */ }
+      });
+    }
+    var saveRecordingsBox = $('save-recordings');
+    if (saveRecordingsBox) {
+      saveRecordingsBox.checked = S.saveRecordings;
+      saveRecordingsBox.addEventListener('change', function () {
+        S.saveRecordings = this.checked;
+        try { localStorage.setItem('flowstate.saveRecordings', S.saveRecordings ? '1' : '0'); }
+        catch (e) { /* preference still applies to the current page */ }
+      });
+    }
     // Clear-local-data button. Confirms first since this wipes every
     // session, transcript, mic recording, and the saved token. After
     // clearing we set
@@ -1788,6 +1888,8 @@
           localStorage.removeItem('flowstate.micDeviceId');
           localStorage.removeItem('flowstate.token');
           localStorage.removeItem('flowstate.autoCopy');
+          localStorage.removeItem('flowstate.trimSilence');
+          localStorage.removeItem('flowstate.saveRecordings');
         } catch (e) { /* ignore quota / disabled storage errors */ }
         try { sessionStorage.setItem('flowstate.cleared', '1'); }
         catch (e) { /* private mode — toast just won't fire */ }
@@ -1823,15 +1925,23 @@
       bits.push(info.auth_required ? 'auth: required' : 'auth: off');
       $('version-line').textContent = bits.join(' · ');
       S.authRequired = !!info.auth_required;
+      if (localStorage.getItem('flowstate.trimSilence') === null) {
+        S.trimSilence = !!info.trim_silence;
+        $('trim-silence').checked = S.trimSilence;
+      }
+      if (localStorage.getItem('flowstate.saveRecordings') === null) {
+        S.saveRecordings = info.save_recordings !== false;
+        $('save-recordings').checked = S.saveRecordings;
+      }
       S.authChecked = true;
       AUTH.statusMessage = '';
       AUTH.statusVariant = '';
       refreshAuthUI();
       if (isAuthBlocked()) {
-        setAuthStatus('Enter the web token to enable transcription.', 'warn');
+        setAuthStatus('Enter the web token to enable recording.', 'warn');
         openAuthPanel(true);
         showToast('API token required', {
-          desc: 'This server requires authentication before transcription.',
+          desc: 'This server requires authentication before recording.',
           variant: 'warn',
           icon: '!',
           duration: 6000
@@ -1840,7 +1950,7 @@
         verifySavedToken();
       } else {
         if (S.authRequired) {
-          setAuthStatus('Token required for transcription. Mic Record works locally.', 'warn');
+          setAuthStatus('Token required for recording.', 'warn');
         } else {
           setAuthStatus(S.token
             ? 'This server does not require a token. The saved token will stay local.'

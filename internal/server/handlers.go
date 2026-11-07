@@ -1,13 +1,18 @@
 package server
 
 import (
+	"bytes"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"net/http"
 	"path/filepath"
 	"strings"
 	"time"
+
+	"github.com/mazen160/flowstate/internal/audio"
+	"github.com/mazen160/flowstate/internal/recording"
 )
 
 // transcribeResponse is the JSON shape /api/transcribe returns on success.
@@ -16,9 +21,11 @@ import (
 // returned its EMPTY sentinel. The frontend handles both cases by simply
 // showing what it got and skipping rendering when both are empty.
 type transcribeResponse struct {
-	Raw        string `json:"raw"`
-	Cleaned    string `json:"cleaned"`
-	DurationMS int64  `json:"duration_ms"`
+	Raw              string `json:"raw"`
+	Cleaned          string `json:"cleaned"`
+	DurationMS       int64  `json:"duration_ms"`
+	RecordingDir     string `json:"recording_dir"`
+	RemovedSilenceMS int64  `json:"removed_silence_ms"`
 }
 
 // healthResponse is the shape of /api/health.
@@ -31,8 +38,10 @@ type healthResponse struct {
 // page load to decide whether to surface the "Token" input in the settings
 // drawer (auth_required=true => surface; false => hide).
 type infoResponse struct {
-	Version      string `json:"version"`
-	AuthRequired bool   `json:"auth_required"`
+	Version        string `json:"version"`
+	AuthRequired   bool   `json:"auth_required"`
+	TrimSilence    bool   `json:"trim_silence"`
+	SaveRecordings bool   `json:"save_recordings"`
 }
 
 // errorResponse is the shape returned for every non-2xx JSON path.
@@ -100,8 +109,10 @@ func (s *Server) handleInfo(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, infoResponse{
-		Version:      s.opts.Version,
-		AuthRequired: s.opts.Token != "",
+		Version:        s.opts.Version,
+		AuthRequired:   s.opts.Token != "",
+		TrimSilence:    s.opts.TrimSilence,
+		SaveRecordings: !s.opts.DisableStorage,
 	})
 }
 
@@ -118,8 +129,8 @@ func (s *Server) handleInfo(w http.ResponseWriter, r *http.Request) {
 //   - 500 — Groq error. The error message is propagated but stripped of
 //     any wrapping that might leak internal context.
 //
-// The server never persists the upload: the temp buffer lives in memory
-// only for the duration of the request.
+// Original and processed audio are saved before contacting the provider.
+// The raw transcript is saved before cleanup so it survives cleanup errors.
 func (s *Server) handleTranscribe(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		writeJSONError(w, http.StatusMethodNotAllowed, "method not allowed")
@@ -132,44 +143,25 @@ func (s *Server) handleTranscribe(w http.ResponseWriter, r *http.Request) {
 
 	t0 := time.Now()
 
-	// Cap the request body BEFORE ParseMultipartForm so a 30 MiB upload
-	// is rejected without buffering the whole thing. The Server reads up
-	// to maxUploadBytes+1 then returns a "request body too large" error
-	// which we translate into a clean 413.
-	r.Body = http.MaxBytesReader(w, r.Body, int64(maxUploadBytes))
-
-	// 1 MiB in-memory threshold; the rest spills to a temp file on disk
-	// that ParseMultipartForm removes when r.Body is closed. We don't
-	// touch the temp file ourselves — the standard library handles
-	// cleanup as long as we close request resources properly.
-	if err := r.ParseMultipartForm(1 << 20); err != nil {
-		if isMaxBytesError(err) {
-			writeJSONError(w, http.StatusRequestEntityTooLarge,
-				"audio upload exceeded the 25 MiB limit")
+	defer removeMultipart(r)
+	upload := s.prepareUpload(w, r)
+	if upload == nil {
+		return
+	}
+	saved := upload.saved
+	out := transcribeResponse{RecordingDir: saved.Dir, RemovedSilenceMS: upload.removed.Milliseconds()}
+	if upload.empty {
+		if err := saved.SaveRaw(""); err != nil {
+			s.storageError(w, err)
 			return
 		}
-		writeJSONError(w, http.StatusBadRequest,
-			"invalid multipart form: "+err.Error())
+		if err := saved.SaveCleaned(""); err != nil {
+			s.storageError(w, err)
+			return
+		}
+		out.DurationMS = time.Since(t0).Milliseconds()
+		writeJSON(w, http.StatusOK, out)
 		return
-	}
-
-	file, header, err := r.FormFile("audio")
-	if err != nil {
-		// No "audio" part — semantically the request lacks the body
-		// type we accept, so 415 (Unsupported Media Type) per the
-		// task spec's "415 if no audio" line.
-		writeJSONError(w, http.StatusUnsupportedMediaType,
-			"missing 'audio' form field")
-		return
-	}
-	defer file.Close()
-
-	// Sanitize the filename the browser handed us. We trust the
-	// extension (it drives the audio Content-Type sent upstream) but
-	// nothing else — the file never touches the filesystem on our side.
-	filename := filepath.Base(header.Filename)
-	if filename == "" || filename == "." || filename == "/" {
-		filename = "recording.webm"
 	}
 
 	// 1. Transcribe. The Groq client owns its own timeout (20s); we
@@ -179,23 +171,29 @@ func (s *Server) handleTranscribe(w http.ResponseWriter, r *http.Request) {
 	// else (network failures, JSON parse, etc.) the raw err.Error()
 	// can contain internal URLs or stack-like details — keep those off
 	// the wire and surface them only on the server's stderr log.
-	raw, err := s.opts.Transcribe.TranscribeReader(r.Context(), file, filename)
+	raw, err := s.opts.Transcribe.TranscribeReader(r.Context(), bytes.NewReader(upload.data), upload.filename)
 	if err != nil {
 		fmt.Fprintf(s.opts.Stderr, "flowstate: transcribe error: %v\n", err)
 		writeJSONError(w, http.StatusInternalServerError, sanitizeUpstreamError(err))
 		return
 	}
+	if err := saved.SaveRaw(raw); err != nil {
+		s.storageError(w, err)
+		return
+	}
+	out.Raw = raw
 
 	// Empty raw transcript is a documented outcome (silence or
 	// hallucination filter) — we return 200 with both fields empty so
 	// the frontend can render a "(no speech detected)" notice without
 	// special-casing a separate status code.
 	if raw == "" {
-		writeJSON(w, http.StatusOK, transcribeResponse{
-			Raw:        "",
-			Cleaned:    "",
-			DurationMS: time.Since(t0).Milliseconds(),
-		})
+		if err := saved.SaveCleaned(""); err != nil {
+			s.storageError(w, err)
+			return
+		}
+		out.DurationMS = time.Since(t0).Milliseconds()
+		writeJSON(w, http.StatusOK, out)
 		return
 	}
 
@@ -210,11 +208,129 @@ func (s *Server) handleTranscribe(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	writeJSON(w, http.StatusOK, transcribeResponse{
-		Raw:        raw,
-		Cleaned:    cleaned,
-		DurationMS: time.Since(t0).Milliseconds(),
-	})
+	if err := saved.SaveCleaned(cleaned); err != nil {
+		s.storageError(w, err)
+		return
+	}
+	out.Cleaned = cleaned
+	out.DurationMS = time.Since(t0).Milliseconds()
+	writeJSON(w, http.StatusOK, out)
+}
+
+// handleRecord archives a mic clip without sending it to any AI provider.
+// []byte is encoded as base64 for the browser's existing audio player.
+func (s *Server) handleRecord(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		writeJSONError(w, http.StatusMethodNotAllowed, "method not allowed")
+		return
+	}
+	defer removeMultipart(r)
+	upload := s.prepareUpload(w, r)
+	if upload == nil {
+		return
+	}
+	writeJSON(w, http.StatusOK, struct {
+		RecordingDir     string `json:"recording_dir"`
+		Audio            []byte `json:"audio"`
+		Ext              string `json:"ext"`
+		RemovedSilenceMS int64  `json:"removed_silence_ms"`
+	}{upload.saved.Dir, upload.data, strings.TrimPrefix(filepath.Ext(upload.filename), "."), upload.removed.Milliseconds()})
+}
+
+func removeMultipart(r *http.Request) {
+	if r.MultipartForm != nil {
+		_ = r.MultipartForm.RemoveAll()
+	}
+}
+
+func (s *Server) storageError(w http.ResponseWriter, err error) {
+	fmt.Fprintf(s.opts.Stderr, "flowstate: recording storage error: %v\n", err)
+	writeJSONError(w, http.StatusInternalServerError, "could not save recording; check the server log for details")
+}
+
+type preparedRecording struct {
+	saved    *recording.Recording
+	data     []byte
+	filename string
+	removed  time.Duration
+	empty    bool
+}
+
+// prepareUpload stores the exact original, then prepares the audio used by
+// both transcription and Mic Record. Browsers also send their decoded WAV
+// as "audio", retaining the MediaRecorder container in "original".
+func (s *Server) prepareUpload(w http.ResponseWriter, r *http.Request) *preparedRecording {
+	fail := func(status int, msg string) *preparedRecording {
+		writeJSONError(w, status, msg)
+		return nil
+	}
+	r.Body = http.MaxBytesReader(w, r.Body, int64(maxUploadBytes))
+	if err := r.ParseMultipartForm(1 << 20); err != nil {
+		if isMaxBytesError(err) {
+			return fail(http.StatusRequestEntityTooLarge, "audio upload exceeded the 25 MiB limit")
+		}
+		return fail(http.StatusBadRequest, "invalid multipart form")
+	}
+	file, header, err := r.FormFile("audio")
+	if err != nil {
+		return fail(http.StatusUnsupportedMediaType, "missing 'audio' form field")
+	}
+	defer file.Close()
+	data, err := io.ReadAll(file)
+	if err != nil {
+		return fail(http.StatusBadRequest, "could not read audio")
+	}
+	filename := filepath.Base(header.Filename)
+	original, originalName := data, filename
+	if originalFile, originalHeader, err := r.FormFile("original"); err == nil {
+		defer originalFile.Close()
+		original, err = io.ReadAll(originalFile)
+		if err != nil {
+			return fail(http.StatusBadRequest, "could not read original audio")
+		}
+		originalName = originalHeader.Filename
+	}
+	trim := s.opts.TrimSilence
+	switch r.FormValue("trim_silence") {
+	case "":
+	case "true":
+		trim = true
+	case "false":
+		trim = false
+	default:
+		return fail(http.StatusBadRequest, "trim_silence must be true or false")
+	}
+	store := !s.opts.DisableStorage
+	switch r.FormValue("save_recordings") {
+	case "":
+	case "true":
+		store = true
+	case "false":
+		store = false
+	default:
+		return fail(http.StatusBadRequest, "save_recordings must be true or false")
+	}
+	saved := recording.NewInMemory()
+	if store {
+		saved, err = recording.New(s.opts.StorageDir, originalName, original)
+		if err != nil {
+			s.storageError(w, err)
+			return nil
+		}
+	}
+	processed, err := saved.Prepare(filename, data, trim)
+	if err != nil {
+		if errors.Is(err, audio.ErrInvalidWAV) {
+			msg := "silence removal requires PCM16 WAV (or set trim_silence=false)."
+			if store {
+				msg += " Original audio was saved."
+			}
+			return fail(http.StatusBadRequest, msg)
+		}
+		s.storageError(w, err)
+		return nil
+	}
+	return &preparedRecording{saved: saved, data: processed.Data, filename: processed.Filename, removed: processed.Removed, empty: processed.Empty}
 }
 
 // isMaxBytesError sniffs whether err originated from http.MaxBytesReader's

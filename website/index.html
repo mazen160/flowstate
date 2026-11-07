@@ -82,7 +82,7 @@
               "name": "Does flowstate store my audio or transcripts?",
               "acceptedAnswer": {
                 "@type": "Answer",
-                "text": "No. The CLI writes only to the destinations you choose. The web server never persists audio or transcripts; history lives in your browser's localStorage and audio streams straight to Groq without touching disk on the server."
+                "text": "Yes, by default. The CLI and local web server save original audio, processed audio, raw transcripts, and AI-cleaned text under .flowstate/ on the computer running flowstate. Turn off Save recordings in Settings or set save_recordings = false to skip the disk archive. Browser history also lives in localStorage. Clearing browser data keeps the archived files."
               }
             },
             {
@@ -227,7 +227,7 @@ flowstate | tee -a journal.md</pre>
               </div>
               <div class="iface-card">
                 <h3><code>flowstate web</code></h3>
-                <p>A local browser app on 127.0.0.1. Live waveform, tap-to-toggle or hold-to-talk, per-session history, JSON or Markdown export. The server never stores your audio.</p>
+                <p>A local browser app on 127.0.0.1. Live waveform, tap-to-toggle or hold-to-talk, per-session history, JSON or Markdown export. Original and processed audio are saved locally.</p>
                 <pre class="mini">flowstate web</pre>
               </div>
             </div>
@@ -271,7 +271,7 @@ flowstate | tee -a journal.md</pre>
           </div>
           <div class="quickstart-aside">
             <p class="eyebrow">Privacy by design</p>
-            <p>No flowstate account, no subscription, no proxy in the middle. The web server never writes your audio or transcripts to disk; history lives in your browser. Your Groq key stays in your environment.</p>
+            <p>No flowstate account, no subscription, no proxy in the middle. Audio and transcripts are archived under <code>.flowstate/</code> on your computer. Browser history stays in your browser. Your Groq key stays in your environment.</p>
             <a class="btn btn-primary" href="https://github.com/mazen160/flowstate#install">Read the install guide</a>
           </div>
         </div>

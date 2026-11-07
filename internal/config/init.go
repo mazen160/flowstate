@@ -55,6 +55,16 @@ input_device = ""
 # other apps doesn't bleed into the mic. Restored on stop.
 mute_while_recording = true
 
+# Remove silent gaps longer than one second before transcription or replay.
+# Silence means all PCM16 samples stay at or below about -60 dBFS.
+trim_silence = true
+
+# Save original/modified audio and raw/AI-cleaned text in a folder per recording.
+save_recordings = true
+
+# Relative paths resolve from the directory where flowstate is launched.
+storage_dir = ".flowstate"
+
 # Output destination. Comma-separated combination of:
 #   stdout, clipboard, paste
 # or the special value "all".

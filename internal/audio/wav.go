@@ -12,9 +12,8 @@ import (
 	"os"
 )
 
-// WAV format constants. These are fixed for the entire package because the
-// transcription pipeline expects exactly this format — there is no scenario
-// in which Flowstate writes a non-PCM16/mono/16k WAV.
+// WAV capture defaults. Silence processing also accepts PCM16 uploads with
+// other sample rates and channel counts and preserves their format.
 const (
 	wavSampleRate    uint32 = 16000
 	wavNumChannels   uint16 = 1
