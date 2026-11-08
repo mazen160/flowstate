@@ -71,3 +71,65 @@ func TestOriginalSurvivesProcessingFailure(t *testing.T) {
 		t.Fatalf("original lost: %v", err)
 	}
 }
+
+func TestStorageDirectoryResolution(t *testing.T) {
+	homeDir := t.TempDir()
+	if runtime.GOOS == "windows" {
+		t.Setenv("USERPROFILE", homeDir)
+	} else {
+		t.Setenv("HOME", homeDir)
+	}
+	workingDir := t.TempDir()
+	t.Chdir(workingDir)
+	// Resolve symlinks in the temporary directory (e.g. /var on macOS)
+	// so the expected relative path matches the OS working directory.
+	workingDir, err := os.Getwd()
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, tc := range []struct {
+		name, root, want string
+	}{
+		{"default", "", filepath.Join(homeDir, ".flowstate")},
+		{"configured default", "~/.flowstate", filepath.Join(homeDir, ".flowstate")},
+		{"home override", "~/recordings", filepath.Join(homeDir, "recordings")},
+		{"relative override", ".flowstate", filepath.Join(workingDir, ".flowstate")},
+		{"absolute override", filepath.Join(homeDir, "custom"), filepath.Join(homeDir, "custom")},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			r, err := New(tc.root, "clip.wav", []byte("original"))
+			if err != nil {
+				t.Fatal(err)
+			}
+			dir, err := filepath.Abs(r.Dir)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if filepath.Dir(dir) != tc.want {
+				t.Fatalf("recording stored in %q, want a directory under %q", dir, tc.want)
+			}
+			data, err := os.ReadFile(filepath.Join(dir, "original.wav"))
+			if err != nil || string(data) != "original" {
+				t.Fatalf("original missing from resolved directory: %q, %v", data, err)
+			}
+		})
+	}
+}
+
+func TestDefaultStorageFailsWithoutHome(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Setenv("USERPROFILE", "")
+	} else {
+		t.Setenv("HOME", "")
+	}
+	t.Chdir(t.TempDir())
+	if _, err := New("", "clip.wav", []byte("original")); err == nil {
+		t.Fatal("default storage must fail when the home directory is unavailable")
+	}
+	if _, err := os.Stat(".flowstate"); !os.IsNotExist(err) {
+		t.Fatalf("default storage touched the working directory: %v", err)
+	}
+	if _, err := New("custom", "clip.wav", []byte("original")); err != nil {
+		t.Fatalf("explicit storage should work without a home directory: %v", err)
+	}
+}

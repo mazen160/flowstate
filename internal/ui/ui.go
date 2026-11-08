@@ -313,8 +313,14 @@ func meterGlyph(level float64) rune {
 // cyan. The trailing newline is included so subsequent output starts on
 // a fresh row.
 func (r *Reporter) Step(label string) {
+	r.Info(label + "…")
+}
+
+// Info prints a complete status message without adding an ellipsis or
+// shortening its contents, so paths remain suitable for copying.
+func (r *Reporter) Info(label string) {
 	dot := r.colorize(ansiCyan, "●")
-	fmt.Fprintf(r.w, "%s %s…\n", dot, label)
+	fmt.Fprintf(r.w, "%s %s\n", dot, label)
 }
 
 // DoneStats is the payload for [Reporter.Done]. All fields are optional;

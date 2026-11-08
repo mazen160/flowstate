@@ -6,6 +6,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.0.6] — 2026-11-08
+
+### Fixed
+- Default recording storage now uses `~/.flowstate/` in the user's home
+  directory for CLI and web recordings. Configured paths beginning with `~/`
+  expand to the home directory; custom relative and absolute paths are supported.
+- CLI recording notices show the full absolute directory without a trailing
+  ellipsis, making saved recordings easier to locate and paths easier to copy.
+- Silence removal now detects pauses containing low microphone noise using
+  adaptive RMS windows, retaining 150 ms next to speech to protect quiet word
+  beginnings and endings. Previously, ordinary microphone noise prevented cuts.
+
 ## [1.0.5] — 2026-11-07
 
 ### Added

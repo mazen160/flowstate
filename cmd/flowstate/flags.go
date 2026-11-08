@@ -67,7 +67,7 @@ func newRecordFlagSet(stderr io.Writer) (*flag.FlagSet, *recordFlags) {
 	fs.BoolVar(&rf.silent, "silent", false, "Suppress all stderr output. Only the cleaned transcript prints (to stdout); errors are silent — check the exit code instead.")
 	fs.BoolVar(&rf.trimSilence, "trim-silence", true, "Remove silent gaps longer than one second. Use --trim-silence=false to disable.")
 	fs.BoolVar(&rf.saveRecordings, "save-recordings", true, "Save recording artifacts to disk. Use --save-recordings=false to disable.")
-	fs.StringVar(&rf.storageDir, "storage-dir", "", "Directory for original/modified audio and raw/AI-cleaned text (default .flowstate).")
+	fs.StringVar(&rf.storageDir, "storage-dir", "", "Directory for original/modified audio and raw/AI-cleaned text (default ~/.flowstate).")
 	// --wav-source is a hidden test affordance. Registered with the
 	// flag set so Parse accepts it, but absent from helpText so users
 	// don't accidentally discover it. The fact-finding test under

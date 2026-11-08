@@ -82,7 +82,7 @@
               "name": "Does flowstate store my audio or transcripts?",
               "acceptedAnswer": {
                 "@type": "Answer",
-                "text": "Yes, by default. The CLI and local web server save original audio, processed audio, raw transcripts, and AI-cleaned text under .flowstate/ on the computer running flowstate. Turn off Save recordings in Settings or set save_recordings = false to skip the disk archive. Browser history also lives in localStorage. Clearing browser data keeps the archived files."
+                "text": "Yes, by default. The CLI and local web server save original audio, processed audio, raw transcripts, and AI-cleaned text under ~/.flowstate/ in your home directory on the computer running flowstate. Turn off Save recordings in Settings or set save_recordings = false to skip the disk archive. Browser history also lives in localStorage. Clearing browser data keeps the archived files."
               }
             },
             {
@@ -271,7 +271,7 @@ flowstate | tee -a journal.md</pre>
           </div>
           <div class="quickstart-aside">
             <p class="eyebrow">Privacy by design</p>
-            <p>No flowstate account, no subscription, no proxy in the middle. Audio and transcripts are archived under <code>.flowstate/</code> on your computer. Browser history stays in your browser. Your Groq key stays in your environment.</p>
+            <p>No flowstate account, no subscription, no proxy in the middle. Audio and transcripts are archived under <code>~/.flowstate/</code> in your home directory. Browser history stays in your browser. Your Groq key stays in your environment.</p>
             <a class="btn btn-primary" href="https://github.com/mazen160/flowstate#install">Read the install guide</a>
           </div>
         </div>

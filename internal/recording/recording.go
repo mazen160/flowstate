@@ -12,7 +12,7 @@ import (
 	"github.com/mazen160/flowstate/internal/audio"
 )
 
-const DefaultDir = ".flowstate"
+const DefaultDir = "~/.flowstate"
 
 type Recording struct {
 	Dir string
@@ -28,11 +28,23 @@ type Audio struct {
 	Empty    bool
 }
 
-// New saves the original bytes before any processing takes place. root is
-// relative to the working directory unless an absolute path is supplied.
+// New saves the original bytes before any processing takes place. An empty
+// root defaults to ~/.flowstate. A leading ~/ expands to the user's home;
+// other relative paths resolve from the working directory.
 func New(root, filename string, original []byte) (*Recording, error) {
 	if root == "" {
 		root = DefaultDir
+	}
+	if root == "~" || strings.HasPrefix(root, "~/") {
+		homeDir, err := os.UserHomeDir()
+		if err != nil {
+			return nil, fmt.Errorf("resolve recording storage home: %w", err)
+		}
+		if root == "~" {
+			root = homeDir
+		} else {
+			root = filepath.Join(homeDir, root[2:])
+		}
 	}
 	if err := os.MkdirAll(root, 0o700); err != nil {
 		return nil, fmt.Errorf("create recording storage: %w", err)

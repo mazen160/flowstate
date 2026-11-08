@@ -74,7 +74,7 @@ A terminal-native, pipe-friendly dictation tool. Press Enter to stop, or hold a 
 <td width="50%" valign="top">
 
 ### Web UI: `flowstate web`
-A local browser app for when you want a button to click instead of a key to press. Live waveform meter, toast notifications, tap-to-toggle or hold-to-talk. Per-browser session history, exports to JSON or Markdown, and recording artifacts saved under `.flowstate/`. One command to start.
+A local browser app for when you want a button to click instead of a key to press. Live waveform meter, toast notifications, tap-to-toggle or hold-to-talk. Per-browser session history, exports to JSON or Markdown, and recording artifacts saved under `~/.flowstate/`. One command to start.
 
 </td>
 </tr>
@@ -316,7 +316,7 @@ Run `flowstate web` and open `http://127.0.0.1:8585`. Here's what you get:
 - **Toasts for everything.** Copies (manual *and* auto), settings saves, session switches, and local-data clears all pop a small bottom-right confirmation so you never wonder if a click landed.
 - **Sessions.** Hit *New session* in the top bar to start a fresh stream. The session select in Settings switches between past sessions; *Export JSON* / *Export Markdown* dump the current page's session items to a file.
 - **Auto-copy** *(opt-in)*. Toggle in Settings to copy each cleaned transcript to the clipboard automatically the moment it finishes.
-- **Local recording archive.** Original audio, processed audio, raw text, and AI-cleaned text are saved under `.flowstate/` on the computer running flowstate. Turn off **Save recordings** in Settings to skip the disk archive. Browser session history and the optional API token also live in `localStorage`. *Clear local data* wipes browser data and keeps archived files.
+- **Local recording archive.** Original audio, processed audio, raw text, and AI-cleaned text are saved under `~/.flowstate/` on the computer running flowstate. Turn off **Save recordings** in Settings to skip the disk archive. Browser session history and the optional API token also live in `localStorage`. *Clear local data* wipes browser data and keeps archived files.
 
 Common knobs:
 
@@ -509,21 +509,23 @@ flowstate is the one that's all of: cross-platform, terminal-native, **with a se
 
 ## Configuration
 
-By default, every recording gets a unique folder under `.flowstate/`, relative to the directory where you launch flowstate:
+By default, every recording gets a unique folder under `~/.flowstate/` in your home directory, regardless of where you launch flowstate:
 
 ```text
-.flowstate/<timestamp>-<unique-id>/
+~/.flowstate/<timestamp>-<unique-id>/
   original.wav    # exact original audio (.webm/.ogg/.mp4 for browser captures)
   modified.wav    # audio after silence removal
   raw.txt         # transcription before AI cleanup
   cleaned.txt     # text after AI cleanup
 ```
 
-Text files are written as their stages finish, so audio and raw text remain available if an API call fails. Mic Record saves the two audio files without running transcription. With trimming off, `modified` keeps the original audio format. Files use private permissions (0600 files / 0700 directories on Unix); `.flowstate/` is gitignored. Delete archived folders manually when you no longer need them.
+Text files are written as their stages finish, so audio and raw text remain available if an API call fails. Mic Record saves the two audio files without running transcription. With trimming off, `modified` keeps the original audio format. Files use private permissions (0600 files / 0700 directories on Unix). Delete archived folders manually when you no longer need them.
+
+Set `storage_dir = "~/.flowstate"` in an existing config to use the home directory. Custom `storage_dir` and `--storage-dir` paths are supported: a leading `~/` expands to your home directory, and other relative paths resolve from the directory where you launch flowstate.
 
 **Save recordings** is enabled by default. Turn it off in web Settings, set `save_recordings = false` in config, or pass `--save-recordings=false` to the CLI to skip the disk archive while keeping trimming and transcription working. The browser remembers its own preference. Browser history and previously archived files are kept separately.
 
-Silence removal is on by default. It removes continuous gaps **strictly longer than 1 second** where every sample stays at or below about **−60 dBFS**. Short pauses and louder audio remain. Use `--trim-silence=false`, `trim_silence = false` in config, or **Remove silent gaps** in web Settings to disable it. Browser preference overrides the server default. No external audio tools are required.
+Silence removal is on by default. It removes continuous gaps **strictly longer than 1 second**, including pauses with low microphone noise. Detection uses 20 ms windows and adapts to the recording's noise and speech levels, capped at **−45 dBFS RMS**. These cuts retain **150 ms next to speech** to protect quiet word beginnings and endings. Recordings without a clear separation between noise and speech use conservative sample-level detection at about **−60 dBFS**. Short pauses and louder audio remain. Use `--trim-silence=false`, `trim_silence = false` in config, or **Remove silent gaps** in web Settings to disable it. Browser preference overrides the server default. No external audio tools are required.
 
 flowstate's CLI and web UI both read the same TOML config and the same `GROQ_API_KEY` environment variable. Tune one place; both interfaces follow.
 
@@ -561,7 +563,7 @@ a friendly message naming both env vars if neither is set.
 | `--silent` | (off) | Suppress all stderr (status, warnings, errors). Only the cleaned transcript prints to stdout; use the exit code to detect failure. |
 | `--trim-silence=false` | on | Keep silent gaps. |
 | `--save-recordings=false` | on | Skip saving recording artifacts to disk. |
-| `--storage-dir <path>` | `.flowstate` | Store recording artifacts here. |
+| `--storage-dir <path>` | `~/.flowstate` | Store recording artifacts here. |
 
 All flags override the matching config field for one invocation only. Unset flags leave the on-disk config untouched.
 
@@ -577,7 +579,7 @@ All flags override the matching config field for one invocation only. Unset flag
 | `--web-port <port>` | `8585` | TCP port to listen on. |
 | `--web-token <token>` | `""` | Optional Bearer token for `/api/*`. Falls back to `FLOWSTATE_WEB_TOKEN`. Empty means auth-disabled. |
 | `--no-browser` | (auto-opens) | Don't open a browser tab on startup. By default `flowstate web` opens the UI in your default browser once the listener is ready. |
-| `--storage-dir <path>` | `.flowstate` | Store recording artifacts here. |
+| `--storage-dir <path>` | `~/.flowstate` | Store recording artifacts here. |
 
 The web subcommand reads the rest of its behavior (transcription model, cleanup model, language, custom vocabulary, output language, prompts) from the same config file the CLI uses.
 
@@ -600,7 +602,7 @@ The web subcommand reads the rest of its behavior (transcription model, cleanup 
 | `mute_while_recording`   | `true`                                     | Mutes system audio output during the recording so playback doesn't bleed in (CLI only). |
 | `trim_silence`           | `true`                                     | Remove silent gaps longer than one second; applies to CLI and web. |
 | `save_recordings`        | `true`                                     | Save audio and text stages to disk; applies to CLI and web. Browser Settings can override the web default. |
-| `storage_dir`            | `".flowstate"`                             | Recording archive directory, relative to the process working directory. |
+| `storage_dir`            | `"~/.flowstate"`                           | Recording archive directory. Expands a leading `~/` to your home; other relative paths resolve from the process working directory. |
 | `output_mode`            | `"stdout,clipboard"`                       | Comma list of `stdout`, `clipboard`, `paste`, or the literal `"all"` (CLI only).     |
 | `preserve_clipboard_after_paste` | `true`                              | When `paste` is enabled, snapshot the current clipboard before pasting and restore it ~500ms later, unless you copied something else in the meantime. |
 | `active_prompt`          | `"default"`                                | Which key under `[prompts]` to use as the system prompt for cleanup.                 |

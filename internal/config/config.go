@@ -64,7 +64,7 @@ func Defaults() Config {
 		MuteWhileRecording:          true,
 		TrimSilence:                 true,
 		SaveRecordings:              true,
-		StorageDir:                  ".flowstate",
+		StorageDir:                  "~/.flowstate",
 		OutputMode:                  "stdout,clipboard",
 		PreserveClipboardAfterPaste: true,
 		ActivePrompt:                "default",

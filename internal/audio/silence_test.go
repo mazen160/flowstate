@@ -3,6 +3,9 @@ package audio
 import (
 	"bytes"
 	"encoding/binary"
+	"fmt"
+	"math"
+	"math/rand"
 	"testing"
 	"time"
 )
@@ -105,6 +108,106 @@ func TestTrimSilenceStereoAndMetadata(t *testing.T) {
 	got, err = TrimSilence(wav)
 	if err != nil || !got.Empty || got.Removed != 2*time.Second {
 		t.Fatalf("stereo silence: %+v, %v", got, err)
+	}
+}
+
+func TestTrimSilenceMicrophoneNoise(t *testing.T) {
+	for _, rate := range []int{8000, 16000, 48000} {
+		for _, channels := range []int{1, 2} {
+			t.Run(fmt.Sprintf("%dHz/%dch", rate, channels), func(t *testing.T) {
+				rng := rand.New(rand.NewSource(1))
+				var samples []int16
+				appendPart := func(ms, amplitude int) {
+					for frame := 0; frame < rate*ms/1000; frame++ {
+						for ch := range channels {
+							sample := int16(rng.Intn(295) - 147) // ~-52 dBFS microphone noise
+							if ch == channels-1 {
+								sample += int16(float64(amplitude) * math.Sin(2*math.Pi*200*float64(frame)/float64(rate)))
+							}
+							samples = append(samples, sample)
+						}
+					}
+				}
+				appendPart(2000, 0)
+				appendPart(100, 100) // quiet consonant before the louder voice
+				appendPart(500, 1200)
+				appendPart(100, 100) // quiet word ending
+				appendPart(2000, 0)
+				appendPart(100, 100)
+				appendPart(500, 1200)
+				appendPart(100, 100)
+				appendPart(2000, 0)
+				// A brief noise spike must not split the long middle pause.
+				samples[rate*3700/1000*channels] += 1500
+				wav := pcmWAV(t, samples)
+				binary.LittleEndian.PutUint16(wav[22:], uint16(channels))
+				binary.LittleEndian.PutUint32(wav[24:], uint32(rate))
+				binary.LittleEndian.PutUint32(wav[28:], uint32(rate*channels*2))
+				binary.LittleEndian.PutUint16(wav[32:], uint16(channels*2))
+				snapshot := bytes.Clone(wav)
+				got, err := TrimSilence(wav)
+				if err != nil {
+					t.Fatal(err)
+				}
+				// Retain both 700 ms utterances plus 50 ms of background on
+				// each side: padding must protect the quiet consonants too.
+				byteOffset := func(ms int) int { return 44 + rate*ms/1000*channels*2 }
+				wantPCM := append(bytes.Clone(wav[byteOffset(1950):byteOffset(2750)]), wav[byteOffset(4650):byteOffset(5450)]...)
+				if got.Empty || got.Removed != 5800*time.Millisecond || !bytes.Equal(got.WAV[44:], wantPCM) {
+					t.Fatalf("noisy pauses or speech padding incorrect: removed=%s, bytes=%d", got.Removed, len(got.WAV))
+				}
+				if !bytes.Equal(got.WAV[20:36], wav[20:36]) || !bytes.Equal(wav, snapshot) {
+					t.Fatal("audio format or original recording changed")
+				}
+			})
+		}
+	}
+}
+
+func TestTrimSilenceNoisyPauseBoundary(t *testing.T) {
+	for _, gapMS := range []int{980, 1000, 1020} {
+		t.Run(fmt.Sprint(gapMS), func(t *testing.T) {
+			rng := rand.New(rand.NewSource(2))
+			frames := 16000 * (1000 + gapMS) / 1000
+			samples := make([]int16, frames)
+			for i := range samples {
+				samples[i] = int16(rng.Intn(295) - 147)
+				if i < 8000 || i >= frames-8000 {
+					samples[i] += int16(1200 * math.Sin(2*math.Pi*200*float64(i)/16000))
+				}
+			}
+			wav := pcmWAV(t, samples)
+			got, err := TrimSilence(wav)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if gapMS <= 1000 {
+				if got.Removed != 0 || !bytes.Equal(got.WAV, wav) {
+					t.Fatal("a pause of one second or less was changed")
+				}
+			} else if got.Removed != 720*time.Millisecond {
+				t.Fatalf("removed %s, want 720 ms with speech padding", got.Removed)
+			}
+		})
+	}
+}
+
+func TestTrimSilenceRetainsUniformQuietSpeechAndLoudNoise(t *testing.T) {
+	for _, amplitude := range []int16{33, 100, 1000} {
+		t.Run(fmt.Sprint(amplitude), func(t *testing.T) {
+			samples := make([]int16, 48000)
+			for i := range samples {
+				samples[i] = amplitude
+				if i%2 == 0 {
+					samples[i] = -amplitude
+				}
+			}
+			wav := pcmWAV(t, samples)
+			got, err := TrimSilence(wav)
+			if err != nil || got.Empty || got.Removed != 0 || !bytes.Equal(got.WAV, wav) {
+				t.Fatalf("uniform audio became its own noise floor: removed=%s, err=%v", got.Removed, err)
+			}
+		})
 	}
 }
 

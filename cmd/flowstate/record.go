@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"path/filepath"
 	"time"
 
 	"github.com/mazen160/flowstate/internal/audio"
@@ -225,7 +226,11 @@ func runRecord(ctx context.Context, args []string, stdin io.Reader, stdout, stde
 		return 1
 	}
 	if saved.Dir != "" {
-		reporter.Step("Saved recording to " + saved.Dir)
+		directory := saved.Dir
+		if absolute, err := filepath.Abs(directory); err == nil {
+			directory = absolute
+		}
+		reporter.Info("Saved recording to " + directory)
 	}
 	if processed.Removed > 0 {
 		reporter.Step(fmt.Sprintf("Removed %.2fs of silence", processed.Removed.Seconds()))

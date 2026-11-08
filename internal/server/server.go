@@ -45,7 +45,7 @@ const maxUploadBytes = 25 * 1024 * 1024
 // validation is light: the only field that can fail loudly later is
 // ListenPort (out-of-range will surface when the listener binds).
 type Options struct {
-	// StorageDir contains a private directory per recording. Empty uses .flowstate.
+	// StorageDir contains a private directory per recording. Empty uses ~/.flowstate.
 	StorageDir string
 	// DisableStorage turns off the recording archive by default. Each upload
 	// can override this default with save_recordings=true or false.

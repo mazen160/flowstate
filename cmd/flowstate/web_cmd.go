@@ -51,7 +51,7 @@ func runWeb(ctx context.Context, args []string, stderr io.Writer) int {
 		"Path to config file (overrides $FLOWSTATE_CONFIG).")
 	fs.BoolVar(&noBrowser, "no-browser", false,
 		"Don't open a browser tab on startup. Default is to open the UI automatically.")
-	fs.StringVar(&storageDir, "storage-dir", "", "Directory for recording artifacts (default .flowstate).")
+	fs.StringVar(&storageDir, "storage-dir", "", "Directory for recording artifacts (default ~/.flowstate).")
 
 	if err := fs.Parse(args); err != nil {
 		if errors.Is(err, flag.ErrHelp) {
