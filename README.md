@@ -59,9 +59,9 @@ definitely move the deadline to next Friday.
 
 The cleaned text lands on stdout AND your clipboard. Status (the `●` / `✓` lines) goes to stderr, pipe-safe by default.
 
-## Two interfaces, one binary
+## Three interfaces, one binary
 
-The same `flowstate` binary speaks two surfaces. Same Groq pipeline, same config file, same brand:
+The same `flowstate` binary speaks three surfaces. Same Groq pipeline, same config file, same brand:
 
 <table>
 <tr>
@@ -75,6 +75,41 @@ A terminal-native, pipe-friendly dictation tool. Press Enter to stop, or hold a 
 
 ### Web UI: `flowstate web`
 A local browser app for when you want a button to click instead of a key to press. Live waveform meter, toast notifications, tap-to-toggle or hold-to-talk. Per-browser session history, exports to JSON or Markdown, and recording artifacts saved under `~/.flowstate/`. One command to start.
+
+</td>
+</tr>
+<tr>
+<td colspan="2" valign="top">
+
+### Desktop UI: `flowstate ui` (Linux)
+A native desktop window — pure Go widgets, no Electron, no browser. Whisperflow-style: one big record button, live level meter, cleaned text front and center. Three tabs cover most of the CLI's features without touching the terminal: **Record** (toggle, copy, paste, saved-artifact path), **History** (session list seeded from `~/.flowstate/`, click to reload, open folder), **Settings** (input device, trigger + PTT key, prompt, cleanup model, languages, vocabulary, output destinations, silence trimming, artifact storage, mute, auto-stop, paste delay — applied live for the session).
+
+Key bindings: `R` record/stop (outside text fields) · `Esc` cancel the take · `Ctrl+R` toggle · `Ctrl+Enter` paste into the focused app.
+
+**Global hotkey that works while another app has focus** — this is the one you want. The window listens on a per-user Unix socket, and your desktop runs `flowstate ui --toggle` as a shortcut, so the key grab belongs to the desktop (which works on Wayland, where an X11 keyboard hook sees nothing):
+
+```sh
+flowstate ui --install-shortcut            # F9 toggles from any app (GNOME)
+flowstate ui --install-shortcut --hotkey f12
+```
+
+It registers one GNOME custom shortcut; rebind or inspect it later under **Settings → Keyboard → Custom Shortcuts**. On other desktops (KDE, Sway, …) add a shortcut yourself that runs `flowstate ui --toggle` — no GNOME needed. On an X11 session the built-in gohook `--hotkey` still works too.
+
+```sh
+flowstate ui                         # native window
+flowstate ui --toggle                # what the desktop shortcut runs
+flowstate ui --no-hotkey             # disable the built-in X11 hotkey
+```
+
+```sh
+flowstate ui                         # native window, F9 toggles anywhere
+flowstate ui --hotkey f12            # pick your own global toggle
+flowstate ui --no-hotkey             # window controls only
+```
+
+Linux needs the GUI system packages alongside the usual audio deps (Debian/Ubuntu): `libxcursor-dev libxi-dev libxxf86vm-dev libgl1-mesa-dev libwayland-dev libffi-dev`.
+
+No root? `make ui-deps` downloads and unpacks those dev files into `.deps/` (gitignored) and the Makefile points the C toolchain at them — no `sudo` needed. Use the `make` targets (`make build`, `make test`, `make vet`) so those flags apply; plain `go build ./...` needs the packages installed system-wide.
 
 </td>
 </tr>
@@ -123,7 +158,7 @@ flowchart LR
     Out --> Browser[browser session<br/>+ JSON / Markdown export]
 ```
 
-The pipeline is shared between the CLI (`flowstate`) and the web server (`flowstate web`). The only thing that differs is what hands the cleaned text back to you.
+The pipeline is shared between the CLI (`flowstate`), the desktop UI (`flowstate ui`), and the web server (`flowstate web`). The only thing that differs is what hands the cleaned text back to you.
 
 ## Status
 
@@ -137,7 +172,7 @@ The fastest path on every platform, one command, one binary, both interfaces:
 go install github.com/mazen160/flowstate/cmd/flowstate@latest
 ```
 
-That gives you `flowstate` (CLI) and `flowstate web` (the local browser UI) in the same executable.
+That gives you `flowstate` (CLI), `flowstate ui` (native Linux desktop UI), and `flowstate web` (the local browser UI) in the same executable.
 
 flowstate is cgo-enabled (audio capture and keyboard hooks need it), so you'll need a working C toolchain. Pick your OS for the exact prerequisites:
 
@@ -176,9 +211,12 @@ sudo apt-get install -y \
     libx11-dev libx11-xcb-dev libxtst-dev libxt-dev \
     libxkbcommon-dev libxkbcommon-x11-dev \
     libxinerama-dev libxrandr-dev libxcursor-dev libxi-dev \
+    libxxf86vm-dev libgl1-mesa-dev libwayland-dev libffi-dev \
     pulseaudio-utils alsa-utils
 go install github.com/mazen160/flowstate/cmd/flowstate@latest
 ```
+
+(Only `flowstate ui` needs the last row — `libxxf86vm-dev libgl1-mesa-dev libwayland-dev libffi-dev` — the Fyne/GLFW windowing stack. The CLI and `flowstate web` build without them.)
 
 Header-to-package cheat sheet if a build still fails on a missing include:
 
@@ -191,6 +229,8 @@ Header-to-package cheat sheet if a build still fails on a missing include:
 | `X11/extensions/XTest.h` | `libxtst-dev` |
 | `X11/Intrinsic.h` | `libxt-dev` |
 | `alsa/asoundlib.h` | `libasound2-dev` |
+| `X11/extensions/xf86vmode.h` | `libxxf86vm-dev` (desktop UI only) |
+| `wayland-client-core.h` | `libwayland-dev` (desktop UI only) |
 
 **Clipboard output needs a clipboard tool.** For `output_mode = clipboard` (part of the default `stdout,clipboard`) — and for `paste`, which seeds the clipboard first — flowstate shells out to a clipboard utility that keeps the copied text available after flowstate exits. Install one:
 

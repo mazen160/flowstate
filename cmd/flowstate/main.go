@@ -36,6 +36,7 @@ const helpText = `flowstate — record, transcribe, and clean up speech with Gro
 
 Usage:
   flowstate [flags]                  Record (default).
+  flowstate ui [flags]               Open the native desktop UI (Linux).
   flowstate web [flags]              Start the local web UI + JSON API.
   flowstate version                  Print version.
   flowstate config init [--force]    Write a default config file.
@@ -65,6 +66,27 @@ Record flags:
   --silent                 Suppress all stderr (status, warnings, errors).
                            Only the cleaned transcript prints to stdout;
                            use the exit code to detect failure.
+
+UI flags (use with: flowstate ui):
+  --hotkey <key>                     Record/stop hotkey (default f9).
+  --no-hotkey                        Disable the hotkey.
+  --install-shortcut                 Register --hotkey as a GNOME shortcut that
+                                     fires "flowstate ui --toggle" from any app
+                                     (the working path on Wayland).
+  --toggle                           Tell the running window to start/stop
+                                     recording, then exit. Bind this yourself
+                                     on desktops other than GNOME.
+  --config <path>                    Override the config file path.
+  --device <uid-or-name>             Override input_device.
+  --prompt <name>                    Override active_prompt.
+  --output <list>                    Override output_mode (comma list or "all").
+
+Keys (in the window): R record/stop · Esc cancel · Ctrl+R toggle ·
+  Ctrl+Enter paste.
+  Global, works while another app is focused:
+    GNOME (Wayland or X11):  flowstate ui --install-shortcut
+    other desktops / X11:    --hotkey (gohook), or bind
+                             "flowstate ui --toggle" in your own settings.
 
 Web flags (use with: flowstate web):
   --storage-dir <path>           Save recording artifacts (default ~/.flowstate).
@@ -109,6 +131,8 @@ func run(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 		return runDevices(stdout, stderr)
 	case "web":
 		return runWeb(context.Background(), args[1:], stderr)
+	case "ui":
+		return runUI(context.Background(), args[1:], stderr)
 	}
 
 	// Anything else (flags like --config=foo or unrecognized positional)

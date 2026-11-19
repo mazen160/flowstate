@@ -49,6 +49,12 @@ jobs:
             libxcb1-dev \
             libx11-xcb-dev \
             libxt-dev \
+            libxcursor-dev \
+            libxi-dev \
+            libxxf86vm-dev \
+            libgl1-mesa-dev \
+            libwayland-dev \
+            libffi-dev \
             pulseaudio-utils \
             alsa-utils
 

@@ -26,3 +26,6 @@ docs/LAUNCH.md
 # Local reference clones — not part of this project
 tests/freeflow/
 tests/instructions.md
+
+# Rootless UI dev files unpacked by `make ui-deps`
+.deps/
