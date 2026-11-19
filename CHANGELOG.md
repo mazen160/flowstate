@@ -6,6 +6,38 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.0.7] — 2026-11-18
+
+### Added
+- Native desktop UI: `flowstate ui` opens a Fyne window (pure Go widgets, no
+  Electron or browser) with one record button, a live level meter, the cleaned
+  text, a History tab backed by the recording artifacts under
+  `~/.flowstate/`, and a Settings tab for the input device, trigger and
+  push-to-talk key, prompt, cleanup model, languages, custom vocabulary,
+  output destinations, silence trimming, artifact storage, mute, auto-stop,
+  and paste delay. It reuses the same transcribe and cleanup pipeline as the
+  CLI and web UI, so behavior and artifacts are identical.
+- Global record/stop hotkey that works on Wayland: the window listens on a
+  per-user socket and `flowstate ui --install-shortcut` registers a GNOME
+  shortcut running `flowstate ui --toggle`, so the key fires from any app.
+  Other desktops can bind that command directly. On X11 the built-in gohook
+  `--hotkey` still works.
+- In-window keys: `R` or `Ctrl+R` to record and stop, `Esc` to discard a take,
+  `Ctrl+Enter` to paste into the focused app.
+- `make ui-deps` unpacks the Wayland/GLFW development files into `.deps/` so
+  the UI builds without root; `make build` picks them up automatically.
+
+### Fixed
+- Speaker state is restored on `SIGINT`/`SIGTERM`, not only on window close,
+  so interrupting a recording no longer leaves the system muted.
+- A second `flowstate ui` reports that one is already running instead of
+  unlinking the live socket and silently breaking the first window's hotkey.
+- When the cleanup call fails, the raw transcript is shown instead of being
+  discarded with the error.
+- The toggle socket path no longer overflows `sun_path` on macOS and Windows,
+  where a deep home or temp directory made `bind` fail with "invalid
+  argument".
+
 ## [1.0.6] — 2026-11-08
 
 ### Fixed
