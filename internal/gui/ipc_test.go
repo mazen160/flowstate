@@ -183,13 +183,32 @@ func TestServeToggle_LongSocketPath(t *testing.T) {
 		t.Fatal("handler never fired")
 	}
 
-	// A second long dir must map to a different socket.
-	other := filepath.Join(t.TempDir(), "another-long-directory-name-here")
-	if err := os.MkdirAll(other, 0o700); err != nil {
+	// When *every* candidate overflows (long runtime dir AND long home) the
+	// hashed fallback must still keep sessions apart. On macOS/Windows a
+	// short cache dir usually exists, which is why the check above passes
+	// there while this one needs all bases pushed long.
+	longBases(t)
+	pathA := toggleSocketPath()
+	if len(pathA) > maxUnixSocketPath {
+		t.Fatalf("fallback path too long: %s", pathA)
+	}
+	longBases(t)
+	pathB := toggleSocketPath()
+	if pathA == pathB {
+		t.Fatalf("two overflowing sessions collided on %s", pathA)
+	}
+}
+
+// longBases points every base directory the socket path derives from at a
+// very deep path, returning the base it used.
+func longBases(t *testing.T) string {
+	t.Helper()
+	base := filepath.Join(t.TempDir(), strings.Repeat("deep-directory-name/", 5))
+	if err := os.MkdirAll(base, 0o700); err != nil {
 		t.Fatal(err)
 	}
-	t.Setenv("XDG_RUNTIME_DIR", other)
-	if otherPath := toggleSocketPath(); otherPath == path {
-		t.Fatalf("two long dirs collided on %s", otherPath)
+	for _, key := range []string{"XDG_RUNTIME_DIR", "XDG_CACHE_HOME", "HOME", "LocalAppData"} {
+		t.Setenv(key, filepath.Join(base, key))
 	}
+	return base
 }
