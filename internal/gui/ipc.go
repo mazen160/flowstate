@@ -3,6 +3,7 @@ package gui
 import (
 	"bufio"
 	"context"
+	"crypto/sha256"
 	"fmt"
 	"net"
 	"os"
@@ -16,19 +17,32 @@ import (
 // on a per-user Unix socket and the desktop's own shortcut system runs
 // `flowstate ui --toggle`, which is a one-shot client for that socket.
 
+// maxUnixSocketPath leaves headroom under sun_path, which is 104 bytes on
+// macOS and 108 on Linux (including the terminating NUL). A deep home or
+// temp directory overflows it and bind fails with "invalid argument".
+const maxUnixSocketPath = 100
+
 // toggleSocketPath is the per-user socket shared by the window and the
-// `--toggle` client. XDG_RUNTIME_DIR is right when set (per-session,
-// 0700, wiped at logout); the cache dir is the fallback on systems
-// without it.
+// `--toggle` client. XDG_RUNTIME_DIR is right when set (per-session, 0700,
+// wiped at logout); the cache dir is the fallback on systems without it.
 func toggleSocketPath() string {
+	var candidates []string
 	if dir := os.Getenv("XDG_RUNTIME_DIR"); dir != "" {
-		return filepath.Join(dir, "flowstate-ui.sock")
+		candidates = append(candidates, filepath.Join(dir, "flowstate-ui.sock"))
 	}
-	dir, err := os.UserCacheDir()
-	if err != nil {
-		return filepath.Join(os.TempDir(), "flowstate-ui.sock")
+	if dir, err := os.UserCacheDir(); err == nil {
+		candidates = append(candidates, filepath.Join(dir, "flowstate-ui.sock"))
 	}
-	return filepath.Join(dir, "flowstate-ui.sock")
+	for _, p := range candidates {
+		if len(p) <= maxUnixSocketPath {
+			return p
+		}
+	}
+	// Every candidate is too long for sun_path. Derive a short name from
+	// them so separate sessions (and tests) still get separate sockets
+	// instead of all colliding on one shared path.
+	sum := sha256.Sum256([]byte(strings.Join(candidates, "|")))
+	return filepath.Join(os.TempDir(), fmt.Sprintf("flowstate-ui-%x.sock", sum[:8]))
 }
 
 // serveToggle listens for toggle requests and calls onToggle (which must

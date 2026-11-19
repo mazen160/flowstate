@@ -3,6 +3,7 @@ package gui
 import (
 	"context"
 	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -146,5 +147,49 @@ func TestServeToggle_RefusesSecondInstance(t *testing.T) {
 	case <-got:
 	case <-time.After(2 * time.Second):
 		t.Fatal("handler never fired")
+	}
+}
+
+// TestServeToggle_LongSocketPath pins the macOS CI failure: sun_path is 104
+// bytes there, so a deep XDG_RUNTIME_DIR made bind fail with "invalid
+// argument". The path must be shortened, and distinct long dirs must not
+// collide on one shared socket.
+func TestServeToggle_LongSocketPath(t *testing.T) {
+	long := filepath.Join(t.TempDir(), strings.Repeat("very-long-directory-name/", 4))
+	if err := os.MkdirAll(long, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("XDG_RUNTIME_DIR", long)
+
+	path := toggleSocketPath()
+	if len(path) > maxUnixSocketPath {
+		t.Fatalf("socket path still too long (%d bytes): %s", len(path), path)
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	got := make(chan struct{}, 1)
+	stop, err := serveToggle(ctx, func() { got <- struct{}{} })
+	if err != nil {
+		t.Fatalf("serveToggle with long runtime dir: %v", err)
+	}
+	defer stop()
+	if err := SendToggle(); err != nil {
+		t.Fatalf("SendToggle: %v", err)
+	}
+	select {
+	case <-got:
+	case <-time.After(2 * time.Second):
+		t.Fatal("handler never fired")
+	}
+
+	// A second long dir must map to a different socket.
+	other := filepath.Join(t.TempDir(), "another-long-directory-name-here")
+	if err := os.MkdirAll(other, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("XDG_RUNTIME_DIR", other)
+	if otherPath := toggleSocketPath(); otherPath == path {
+		t.Fatalf("two long dirs collided on %s", otherPath)
 	}
 }
